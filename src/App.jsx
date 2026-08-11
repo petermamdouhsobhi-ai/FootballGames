@@ -701,7 +701,7 @@ function AppInner() {
     setError("");
     const c = joinCode.trim().toUpperCase();
     const r = await getRoom(c);
-    if (!r) { setError(tr("مفيش غرفة بالكود ده.", "No room with that code.")); return; }
+    if (!r || !Array.isArray(r.players)) { setError(tr("الغرفة دي معادتش شغالة، جرب كود تاني أو اعمل غرفة جديدة.", "This room is no longer valid — try a different code or create a new one.")); return; }
     if (r.phase !== "lobby") { setError(tr("المزاد بدأ خلاص في الغرفة دي.", "The auction already started in this room.")); return; }
     const id = uid();
     r.players.push({ id, name, budget: r.budget, squad: [], coachId: null });
@@ -1290,6 +1290,7 @@ function Home({ onCreate, onJoin, error, onBack, account }) {
 // ---------- Lobby ----------
 function Lobby({ room, myId, onStart, onLeave }) {
   const { tr, lang } = useLang();
+  if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const isHost = room.players[0]?.id === myId;
   return (
     <Shell>
@@ -1638,7 +1639,7 @@ function GuessWho({ onExit, account }) {
     setError("");
     const c = joinCode.trim().toUpperCase();
     const r = await getGwRoom(c);
-    if (!r) { setError(tr("مفيش غرفة بالكود ده.", "No room with that code.")); return; }
+    if (!r || !Array.isArray(r.players)) { setError(tr("الغرفة دي معادتش شغالة، جرب كود تاني أو اعمل غرفة جديدة.", "This room is no longer valid — try a different code or create a new one.")); return; }
     if (r.players.length >= 2) { setError(tr("الغرفة مكتملة (لعبة لشخصين بس).", "Room is full (2-player game only).")); return; }
     if (r.phase !== "lobby") { setError(tr("اللعبة بدأت خلاص.", "The game already started.")); return; }
     const id = uid();
@@ -1763,6 +1764,7 @@ function GwHome({ onCreate, onJoin, error, onBack, account }) {
 
 function GwLobby({ room, myId, onStart, onLeave }) {
   const { tr } = useLang();
+  if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const isHost = room.players[0]?.id === myId;
   return (
     <Shell>
@@ -2029,7 +2031,7 @@ function DreamTeam({ onExit, account }) {
     setError("");
     const c = joinCode.trim().toUpperCase();
     const r = await getDtRoom(c);
-    if (!r) { setError(tr("مفيش غرفة بالكود ده.", "No room with that code.")); return; }
+    if (!r || !Array.isArray(r.players)) { setError(tr("الغرفة دي معادتش شغالة، جرب كود تاني أو اعمل غرفة جديدة.", "This room is no longer valid — try a different code or create a new one.")); return; }
     if (r.phase !== "lobby") { setError(tr("اللعبة بدأت خلاص.", "The game already started.")); return; }
     const id = uid();
     r.players.push({ id, name, squad: [], coachId: null, ready: false });
@@ -2157,6 +2159,7 @@ function DtHome({ onCreate, onJoin, error, onBack, account }) {
 
 function DtLobby({ room, myId, onStart, onLeave }) {
   const { tr } = useLang();
+  if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const isHost = room.players[0]?.id === myId;
   return (
     <Shell>
@@ -2487,7 +2490,7 @@ function LeagueGame({ onExit, account }) {
     setError("");
     const c = joinCode.trim().toUpperCase();
     const r = await getLgRoom(c);
-    if (!r) { setError(tr("مفيش غرفة بالكود ده.", "No room with that code.")); return; }
+    if (!r || !Array.isArray(r.players)) { setError(tr("الغرفة دي معادتش شغالة، جرب كود تاني أو اعمل غرفة جديدة.", "This room is no longer valid — try a different code or create a new one.")); return; }
     if (r.phase !== "lobby") { setError(tr("الدرافت بدأ خلاص في الغرفة دي.", "Drafting already started in this room.")); return; }
     const id = uid();
     r.players.push({ id, name, squad: [], captainId: null, ready: false, total: 0 });
@@ -2648,6 +2651,7 @@ function LgHome({ onCreate, onJoin, error, onBack, account, comp }) {
 
 function LgLobby({ room, myId, comp, onStart, onLeave }) {
   const { tr, lang } = useLang();
+  if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const isHost = room.players[0]?.id === myId;
   return (
     <Shell>
@@ -2774,9 +2778,9 @@ function RoomBroken({ onLeave }) {
 
 // ---------- Global safety net: catch any render crash and show a friendly recovery screen instead of a blank page ----------
 class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(err) { console.error("App crashed:", err); }
+  constructor(props) { super(props); this.state = { hasError: false, errMsg: "", errStack: "", compStack: "" }; }
+  static getDerivedStateFromError(err) { return { hasError: true, errMsg: String(err?.message || err), errStack: String(err?.stack || "") }; }
+  componentDidCatch(err, info) { console.error("App crashed:", err); this.setState({ compStack: String(info?.componentStack || "") }); }
   handleReset = () => {
     try {
       window.storage?.delete?.("my-session", false);
@@ -2798,6 +2802,16 @@ class ErrorBoundary extends React.Component {
             <button onClick={this.handleReset} style={{ background: "#39FF88", color: "#0A0E27", fontWeight: 700, padding: "10px 20px", borderRadius: 10, border: "none" }}>
               رجوع للبداية
             </button>
+            <details style={{ marginTop: 18, textAlign: "left", direction: "ltr" }}>
+              <summary style={{ color: "#EEF1FF66", fontSize: 12, cursor: "pointer" }}>تفاصيل فنية (للمطور)</summary>
+              <pre style={{ color: "#FF3B5C", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "#141B3D", padding: 10, borderRadius: 8, marginTop: 8, maxHeight: 220, overflow: "auto" }}>
+                {this.state.errMsg}
+                {"\n\n"}
+                {this.state.compStack}
+                {"\n\n"}
+                {this.state.errStack}
+              </pre>
+            </details>
           </div>
         </div>
       );
