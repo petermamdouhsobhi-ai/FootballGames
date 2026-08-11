@@ -8,7 +8,7 @@ function useLang() {
   return { lang, dir: lang === "ar" ? "rtl" : "ltr", tr };
 }
 function detectLang() {
-  try {
+  try {8
     const nav = (navigator.language || navigator.userLanguage || "en").toLowerCase();
     return nav.startsWith("ar") ? "ar" : "en";
   } catch { return "en"; }
