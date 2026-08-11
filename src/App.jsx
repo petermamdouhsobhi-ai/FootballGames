@@ -677,7 +677,7 @@ function AppInner() {
     pollRef.current = setInterval(async () => {
       const r = await getRoom(c);
       if (r) setRoomState(r);
-    }, 1800);
+    }, 3000);
   }, []);
 
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
@@ -1065,13 +1065,13 @@ function Hub({ onPick, account }) {
         <div className="ff-display text-4xl font-bold" style={{ color: "#39FF88" }}>{tr("ألعاب الكورة", "Football Games")}</div>
         <p className="ff-body text-sm mt-1" style={{ color: "#EEF1FFAA" }}>{tr(`أهلاً ${account?.username} — اختار اللعبة اللي عايز تلعبها`, `Hi ${account?.username} — pick a game to play`)}</p>
       </div>
-      <div className="space-y-3">
-        <GameCard index={0} color="#FFD447" icon={<IconTrophy color="#FFD447" />} title={tr("لوحة المتصدرين", "Leaderboard")} desc={tr("سكورك وترتيبك بين كل اللاعبين اللي بيسجلوا في كل الألعاب", "Your score and rank among everyone who plays")} onClick={() => onPick("dashboard")} />
-        <GameCard index={1} color="#00D9FF" icon={<IconCup color="#00D9FF" />} title={tr("الدوري الفانتازي", "Fantasy League")} desc={tr("اختار دوري، ادرافت تشكيلتك، والذكاء الاصطناعي يحاكي كل جولة", "Pick a league, draft your XI, AI simulates each gameweek")} onClick={() => onPick("league")} />
-        <GameCard index={2} color="#39FF88" icon={<IconGavel color="#39FF88" />} title={tr("مزاد الفانتازي", "Fantasy Auction")} desc={tr("كوّن فريقك بالمزاد مع أصحابك، والعب بتعليق الذكاء الاصطناعي", "Build your squad in a live auction, play with AI commentary")} onClick={() => onPick("auction")} />
-        <GameCard index={3} color="#A855F7" icon={<IconSearch color="#A855F7" />} title={tr("خمّن اللاعب", "Guess the Player")} desc={tr("3 أشكال: أسئلة، مسار الانتقالات، وجايزة في سنة", "3 modes: Q&A, transfer path, award-in-a-year")} onClick={() => onPick("guess-menu")} />
-        <GameCard index={4} color="#FF3B5C" icon={<IconShirt color="#FF3B5C" />} title={tr("تشكيلة الأحلام", "Dream Team")} desc={tr("اختار أفضل 11 لاعب، وقارن تشكيلتك بالباقي", "Draft your best XI and compare with everyone else")} onClick={() => onPick("dream")} />
-        <GameCard index={5} color="#2E8FFF" icon={<IconQuiz color="#2E8FFF" />} title={tr("تريفيا الكورة", "Football Trivia")} desc={tr("أسئلة اختيارات متعددة، لوحدك، شوف كام هتجاوب صح", "Solo multiple-choice trivia — see how many you get right")} onClick={() => onPick("trivia")} />
+      <div className="grid grid-cols-2 gap-3">
+        <GameCard layout="grid" index={0} color="#FFD447" icon={<IconTrophy color="#FFD447" />} title={tr("لوحة المتصدرين", "Leaderboard")} desc={tr("سكورك بين كل اللاعبين", "Your rank overall")} onClick={() => onPick("dashboard")} />
+        <GameCard layout="grid" index={1} color="#00D9FF" icon={<IconCup color="#00D9FF" />} title={tr("الدوري الفانتازي", "Fantasy League")} desc={tr("ادرافت تشكيلتك", "Draft your XI")} onClick={() => onPick("league")} />
+        <GameCard layout="grid" index={2} color="#39FF88" icon={<IconGavel color="#39FF88" />} title={tr("مزاد الفانتازي", "Fantasy Auction")} desc={tr("كوّن فريقك بالمزاد", "Build in a live auction")} onClick={() => onPick("auction")} />
+        <GameCard layout="grid" index={3} color="#A855F7" icon={<IconSearch color="#A855F7" />} title={tr("خمّن اللاعب", "Guess the Player")} desc={tr("3 أشكال مختلفة", "3 modes")} onClick={() => onPick("guess-menu")} />
+        <GameCard layout="grid" index={4} color="#FF3B5C" icon={<IconShirt color="#FF3B5C" />} title={tr("تشكيلة الأحلام", "Dream Team")} desc={tr("اختار أفضل 11", "Draft your best XI")} onClick={() => onPick("dream")} />
+        <GameCard layout="grid" index={5} color="#2E8FFF" icon={<IconQuiz color="#2E8FFF" />} title={tr("تريفيا الكورة", "Football Trivia")} desc={tr("اختبر معلوماتك", "Test your knowledge")} onClick={() => onPick("trivia")} />
       </div>
     </Shell>
   );
@@ -1135,8 +1135,23 @@ function IconBall({ color, size = 22 }) {
   );
 }
 
-function GameCard({ title, desc, onClick, index = 0, icon, color = "#39FF88" }) {
+function GameCard({ title, desc, onClick, index = 0, icon, color = "#39FF88", layout = "row" }) {
   const { dir } = useLang();
+  if (layout === "grid") {
+    return (
+      <button onClick={onClick} className="ff-fade-up ff-hover-lift rounded-xl p-4 transition active:scale-95 flex flex-col items-center text-center"
+        style={{ background: "#141B3D", border: "1px solid #39FF8833", animationDelay: `${index * 0.06}s` }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8,
+          background: `linear-gradient(150deg, ${color}33 0%, ${color}11 100%)`, border: `1px solid ${color}55`,
+        }}>
+          {icon || <IconBall color={color} />}
+        </div>
+        <div className="ff-body font-bold text-sm leading-tight" style={{ color: "#EEF1FF" }}>{title}</div>
+        <div className="ff-body text-[11px] mt-1 leading-snug" style={{ color: "#EEF1FF77" }}>{desc}</div>
+      </button>
+    );
+  }
   return (
     <button onClick={onClick} className="ff-fade-up ff-hover-lift w-full rounded-xl p-4 transition active:scale-95 flex items-center gap-3"
       style={{ background: "#141B3D", border: "1px solid #39FF8833", textAlign: dir === "rtl" ? "right" : "left", animationDelay: `${index * 0.07}s` }}>
@@ -1318,11 +1333,13 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
   let title, base, cardColor;
   if (isCoach) {
     const coach = coachById(a.coachId);
+    if (!coach) return <RoomBroken onLeave={onLeave} />;
     title = cname(coach, lang); base = cstyle(coach, lang); cardColor = "#39FF88";
   } else if (isPosition) {
     title = tr(`مركز: ${posLabel[a.pos]} 🎁`, `Position: ${posLabel[a.pos]} 🎁`); base = tr("لاعب عشوائي من نفس المركز — هتعرف مين بعد ما تكسب", "A random player of this position — revealed once you win"); cardColor = POS_COLOR[a.pos];
   } else {
     const pl = playerById(a.playerId);
+    if (!pl) return <RoomBroken onLeave={onLeave} />;
     title = pname(pl, lang); base = tr(`تقييم ${pl.rating} · سعر أساسي ${pl.base}`, `Rating ${pl.rating} · Base price ${pl.base}`); cardColor = POS_COLOR[pl.pos];
   }
 
@@ -1599,7 +1616,7 @@ function GuessWho({ onExit, account }) {
 
   const startPolling = useCallback((c) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => { const r = await getGwRoom(c); if (r) setRoomState(r); }, 1800);
+    pollRef.current = setInterval(async () => { const r = await getGwRoom(c); if (r) setRoomState(r); }, 3000);
   }, []);
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
 
@@ -1989,7 +2006,7 @@ function DreamTeam({ onExit, account }) {
 
   const startPolling = useCallback((c) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => { const r = await getDtRoom(c); if (r) setRoomState(r); }, 1800);
+    pollRef.current = setInterval(async () => { const r = await getDtRoom(c); if (r) setRoomState(r); }, 3000);
   }, []);
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
 
@@ -2445,7 +2462,7 @@ function LeagueGame({ onExit, account }) {
 
   const startPolling = useCallback((c) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => { const r = await getLgRoom(c); if (r) setRoomState(r); }, 1800);
+    pollRef.current = setInterval(async () => { const r = await getLgRoom(c); if (r) setRoomState(r); }, 3000);
   }, []);
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
 
@@ -2736,12 +2753,57 @@ function LgPlay({ room, myId, comp, onRunGameweek, onLeave }) {
   );
 }
 
+function RoomBroken({ onLeave }) {
+  const { tr } = useLang();
+  return (
+    <Shell>
+      <div className="rounded-xl p-6 text-center ff-fade-up" style={{ background: "#141B3D", border: "1px solid #FF3B5C55" }}>
+        <div style={{ fontSize: 40 }}>⚠️</div>
+        <div className="ff-display text-2xl font-bold mt-2" style={{ color: "#FF3B5C" }}>{tr("الغرفة دي معادتش شغالة", "This room is no longer valid")}</div>
+        <p className="ff-body text-sm mt-2" style={{ color: "#EEF1FFAA" }}>{tr("يمكن كانت غرفة قديمة من تجربة سابقة. جرّب تعمل غرفة جديدة.", "It might be an old test room. Try creating a new one.")}</p>
+        <Btn onClick={onLeave} className="mt-4 w-full">{tr("رجوع لقائمة الألعاب", "Back to games")}</Btn>
+      </div>
+    </Shell>
+  );
+}
+
+// ---------- Global safety net: catch any render crash and show a friendly recovery screen instead of a blank page ----------
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err) { console.error("App crashed:", err); }
+  handleReset = () => {
+    try { window.storage?.delete?.("my-session", false); } catch {}
+    this.setState({ hasError: false });
+    window.location.reload();
+  };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: "100vh", background: "#0A0E27", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ maxWidth: 380, textAlign: "center", fontFamily: "Cairo, sans-serif" }}>
+            <div style={{ fontSize: 44 }}>⚽💥</div>
+            <div style={{ color: "#39FF88", fontSize: 22, fontWeight: 700, margin: "12px 0 6px" }}>حصل خطأ غير متوقع</div>
+            <p style={{ color: "#EEF1FFAA", fontSize: 14, marginBottom: 16 }}>حاول نرجعك لبداية اللعبة. لو المشكلة استمرت، جرب تفتح الموقع من جديد.</p>
+            <button onClick={this.handleReset} style={{ background: "#39FF88", color: "#0A0E27", fontWeight: 700, padding: "10px 20px", borderRadius: 10, border: "none" }}>
+              رجوع للبداية
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ---------- Root: detect device language, provide it to the whole app ----------
 export default function App() {
   const [lang] = useState(detectLang);
   return (
-    <LangContext.Provider value={{ lang }}>
-      <AppInner />
-    </LangContext.Provider>
+    <ErrorBoundary>
+      <LangContext.Provider value={{ lang }}>
+        <AppInner />
+      </LangContext.Provider>
+    </ErrorBoundary>
   );
 }
