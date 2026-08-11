@@ -386,20 +386,30 @@ Pick scorers matching that exact goal count, using only the player names listed 
 Reply with JSON only, no extra text or markdown, in exactly this shape:
 {"commentary": "a 100-150 word paragraph describing the match", "scorers": [{"team":"${teamA.name}","player":"name from the list","minute":23}], "motm": "a player name from either squad"}`;
 
-  const response = await fetch("/api/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const data = await response.json();
-  const text = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
-  const clean = text.replace(/```json|```/g, "").trim();
-  try { return JSON.parse(clean); }
-  catch { return { commentary: text || "تعذر توليد التعليق.", scorers: [], motm: "" }; }
+  const fallback = {
+    commentary: isAr
+      ? `مباراة قوية بين ${teamA.name} و${teamB.name} انتهت ${scoreA}-${scoreB}. (تعذر توليد تعليق الذكاء الاصطناعي هذه المرة)`
+      : `A tight match between ${teamA.name} and ${teamB.name} ended ${scoreA}-${scoreB}. (AI commentary unavailable this time)`,
+    scorers: [], motm: "",
+  };
+  try {
+    const response = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await response.json();
+    const text = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+    const clean = text.replace(/```json|```/g, "").trim();
+    try { return { ...fallback, ...JSON.parse(clean) }; }
+    catch { return text ? { ...fallback, commentary: text } : fallback; }
+  } catch {
+    return fallback;
+  }
 }
 
 // ---------- Guess Who (football edition) ----------
@@ -547,10 +557,46 @@ const FONT_STYLE = `
   background-size: 200% 100%;
   animation: ff-shimmer 2.2s ease-in-out infinite;
 }
+
+/* ---------- stadium atmosphere ---------- */
+@keyframes ff-sweep { 0% { transform: translateX(-30%) rotate(8deg); opacity: 0; } 15% { opacity: 0.5; } 85% { opacity: 0.5; } 100% { transform: translateX(130%) rotate(8deg); opacity: 0; } }
+@keyframes ff-crowd-flicker { 0%,100% { opacity: 0.35; } 50% { opacity: 0.6; } }
+.ff-stadium-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ff-floodlight { position: absolute; top: -10%; width: 55%; height: 140%; background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 70%); animation: ff-sweep 9s ease-in-out infinite; }
+.ff-crowd-dots {
+  position: absolute; left: 0; right: 0; top: 0; height: 130px;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1.4px);
+  background-size: 7px 7px; opacity: 0.35; animation: ff-crowd-flicker 3.5s ease-in-out infinite;
+  -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+  mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+}
+.ff-pitch-lines {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 220px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 90px),
+    linear-gradient(180deg, transparent 0%, rgba(57,255,136,0.05) 100%);
+  -webkit-mask-image: linear-gradient(0deg, black 0%, transparent 100%);
+  mask-image: linear-gradient(0deg, black 0%, transparent 100%);
+}
+
+/* ---------- card flip reveal (used when a player joins a squad) ---------- */
+@keyframes ff-flip-in { 0% { transform: rotateY(90deg) scale(0.9); opacity: 0; } 60% { transform: rotateY(-12deg); } 100% { transform: rotateY(0deg) scale(1); opacity: 1; } }
+.ff-flip-in { animation: ff-flip-in 0.5s cubic-bezier(.2,.7,.3,1) both; transform-style: preserve-3d; }
 `;
 
 function Chip({ children, color }) {
   return <span className="ff-body text-xs font-bold px-2 py-0.5 rounded ff-pop-in" style={{ background: color + "22", color }}>{children}</span>;
+}
+
+function StadiumBackground() {
+  return (
+    <div className="ff-stadium-bg">
+      <div className="ff-crowd-dots" />
+      <div className="ff-floodlight" style={{ left: "-10%" }} />
+      <div className="ff-floodlight" style={{ left: "55%", animationDelay: "4.5s" }} />
+      <div className="ff-pitch-lines" />
+    </div>
+  );
 }
 
 // ---------- Confetti burst (pure CSS, no dependencies) ----------
@@ -603,19 +649,35 @@ const CARD_SIZES = {
   md: { w: 60, h: 76, num: 24, pos: 8, r: 10 },
   lg: { w: 96, h: 122, num: 38, pos: 12, r: 14 },
 };
-// أفتار توضيحي ثابت لكل لاعب (مش صور حقيقية محمية بحقوق نشر — رسمة نضيفة وثابتة لكل id، ستايل مسطّح وشيك)
-function avatarUrl(id) {
-  return `https://api.dicebear.com/10.x/personas/svg?seed=${encodeURIComponent(id)}&backgroundColor=transparent`;
+
+// شكل قميص رياضي مرسوم بالكود (SVG) — بدل صور حقيقية لأي لاعب، رقم القميص ولون المركز بس
+function JerseyIcon({ color, size, number }) {
+  const gid = "jg" + color.replace("#", "");
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.5" />
+        </linearGradient>
+      </defs>
+      <path d="M32,14 L14,26 L24,47 L31,42 L31,89 L69,89 L69,42 L76,47 L86,26 L68,14 L59,19 L54,14 L46,14 L41,19 Z"
+        fill={`url(#${gid})`} stroke="#0A0E27" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M45,14.5 L50,24 L55,14.5" fill="none" stroke="#0A0E27" strokeWidth="2.5" strokeLinejoin="round" />
+      <text x="50" y="70" textAnchor="middle" fontFamily="Teko, sans-serif" fontSize="36" fontWeight="700" fill="#0A0E2799">{number}</text>
+    </svg>
+  );
 }
-function PlayerCard({ player, lang, size = "md", selected }) {
+
+function PlayerCard({ player, lang, size = "md", selected, justWon }) {
   if (!player) return null;
   const color = POS_COLOR[player.pos] || "#39FF88";
   const num = jerseyNumber(player.id);
   const d = CARD_SIZES[size];
   const posLabel = (lang === "ar" ? POS_LABEL : POS_LABEL_EN)[player.pos];
-  const avatarSize = Math.round(d.w * 0.72);
+  const avatarSize = Math.round(d.w * 0.8);
   return (
-    <div className="ff-hover-lift ff-pop-in" style={{
+    <div className={"ff-hover-lift " + (justWon ? "ff-flip-in" : "ff-pop-in")} style={{
       width: d.w, height: d.h, borderRadius: d.r, flexShrink: 0,
       background: `linear-gradient(160deg, ${color}40 0%, #0A0E27E6 65%)`,
       border: `1.5px solid ${selected ? color : color + "55"}`,
@@ -624,15 +686,9 @@ function PlayerCard({ player, lang, size = "md", selected }) {
     }}>
       {selected && <div className="ff-shimmer-bg" style={{ position: "absolute", inset: 0 }} />}
       <div style={{ position: "absolute", top: 4, insetInlineStart: 4, width: 7, height: 7, borderRadius: 999, background: color, zIndex: 2 }} />
-      <div style={{
-        width: avatarSize, height: avatarSize, borderRadius: "999px", overflow: "hidden",
-        background: `radial-gradient(circle, ${color}33 0%, transparent 70%)`,
-        border: `1px solid ${color}66`, marginBottom: size === "sm" ? 1 : 2, zIndex: 1,
-      }}>
-        <img src={avatarUrl(player.id)} alt="" width={avatarSize} height={avatarSize}
-          style={{ width: "100%", height: "100%", display: "block" }} loading="lazy" />
+      <div style={{ width: avatarSize, height: avatarSize, marginBottom: size === "sm" ? 0 : 1, zIndex: 1 }}>
+        <JerseyIcon color={color} size={avatarSize} number={num} />
       </div>
-      {size !== "sm" && <div className="ff-display" style={{ fontSize: d.num * 0.6, fontWeight: 700, color: "#EEF1FF88", lineHeight: 1, position: "absolute", bottom: size === "lg" ? 6 : 3, insetInlineEnd: 6 }}>{num}</div>}
       <div className="ff-body" style={{ fontSize: d.pos, color, fontWeight: 700, zIndex: 1 }}>{posLabel}</div>
     </div>
   );
@@ -808,7 +864,7 @@ function AppInner() {
         return;
       }
       const coachId = leftover[Math.floor(Math.random() * leftover.length)];
-      r.auction = { coachId, currentBid: 0, bidderId: null, deadline: Date.now() + 15000, kind: "coach" };
+      r.auction = { coachId, currentBid: 0, bidderId: null, passed: {}, deadline: Date.now() + 15000, kind: "coach" };
       return;
     }
 
@@ -821,38 +877,53 @@ function AppInner() {
     const pos = neededPositions(quota, anchor.squad)[0];
     const offeredId = pickForPositions(r.availableIds, [pos]);
     if (!offeredId) { r.auction = null; r.turnIndex = (r.turnIndex + 1) % r.players.length; nextRound(r); return; }
-    r.auction = { pos, playerId: offeredId, currentBid: 0, bidderId: null, deadline: Date.now() + 15000, kind: "player" };
+    r.auction = { pos, playerId: offeredId, currentBid: 0, bidderId: null, passed: {}, deadline: Date.now() + 15000, kind: "player" };
+  }
+
+  function canPlayerBidNow(r, p) {
+    const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
+    const total = Object.values(quota).reduce((a, b) => a + b, 0);
+    return r.auction.kind === "coach" ? !p.coachId : ((p.squad?.length || 0) < total && neededPositions(quota, p.squad || []).includes(r.auction.pos));
   }
 
   async function placeBid(amount) {
     const r = await getRoom(code);
     if (!r || !r.auction) return;
     const me = r.players.find((p) => p.id === myId);
-    if (!me) return;
-    const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
-    const total = Object.values(quota).reduce((a, b) => a + b, 0);
-    const canBid = r.auction.kind === "coach" ? !me.coachId : (me.squad.length < total && neededPositions(quota, me.squad).includes(r.auction.pos));
-    if (!canBid) return;
+    if (!me || !canPlayerBidNow(r, me)) return;
     const next = Number(amount);
     if (!next || next <= r.auction.currentBid || next > me.budget || r.auction.bidderId === myId) return;
     r.auction.currentBid = next;
     r.auction.bidderId = myId;
+    if (r.auction.passed) delete r.auction.passed[myId]; // زوّد تاني بعد ما كان ماشي؟ رجّعه للمنافسة
     r.auction.deadline = Date.now() + 15000;
     setRoomState(await setRoom(code, r));
   }
 
-  async function resolveRoundIfExpired() {
+  // اللاعب بيقول "مش هزايد" على الجولة دي؛ لو كل اللي لسه محتاجين نفس المركز عملوا كده
+  // (أو هما أصلاً صاحب أعلى عرض)، الجولة تتحسم فورًا من غير استنى الوقت
+  async function passRound() {
     const r = await getRoom(code);
     if (!r || !r.auction) return;
-    if (Date.now() < r.auction.deadline) return;
+    const me = r.players.find((p) => p.id === myId);
+    if (!me || !canPlayerBidNow(r, me) || r.auction.bidderId === myId) return;
+    r.auction.passed = r.auction.passed || {};
+    r.auction.passed[myId] = true;
+    const eligible = r.players.filter((p) => canPlayerBidNow(r, p));
+    const allDone = eligible.every((p) => p.id === r.auction.bidderId || r.auction.passed[p.id]);
+    if (allDone) settleRound(r);
+    setRoomState(await setRoom(code, r));
+  }
+
+  function settleRound(r) {
     const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
     const total = Object.values(quota).reduce((a, b) => a + b, 0);
     const winnerId = r.auction.bidderId;
+    const winner = winnerId ? r.players.find((p) => p.id === winnerId) : null;
 
     if (r.auction.kind === "coach") {
-      if (winnerId) {
-        const w = r.players.find((p) => p.id === winnerId);
-        w.coachId = r.auction.coachId; w.budget -= r.auction.currentBid;
+      if (winner) {
+        winner.coachId = r.auction.coachId; winner.budget = (winner.budget || 0) - r.auction.currentBid;
       }
       const claimed = new Set(r.players.map((p) => p.coachId).filter(Boolean));
       let leftover = COACHES.map((c) => c.id).filter((id) => !claimed.has(id));
@@ -863,18 +934,19 @@ function AppInner() {
       });
     } else {
       const pl = playerById(r.auction.playerId);
-      if (winnerId) {
-        const w = r.players.find((p) => p.id === winnerId);
-        w.squad.push({ id: pl.id, name: pl.name, pos: pl.pos, rating: pl.rating, price: r.auction.currentBid });
-        w.budget -= r.auction.currentBid;
-        r.availableIds = r.availableIds.filter((id) => id !== pl.id);
+      if (winner && pl) {
+        winner.squad = Array.isArray(winner.squad) ? winner.squad : [];
+        winner.squad.push({ id: pl.id, name: pl.name, pos: pl.pos, rating: pl.rating, price: r.auction.currentBid });
+        winner.budget = (winner.budget || 0) - r.auction.currentBid;
+        r.availableIds = (r.availableIds || []).filter((id) => id !== pl.id);
       }
       // اللي ماخدوش يبقوا لسه محتاجين نفس المركز، ياخدوا لاعب تاني عشوائي بنفس المركز ببلاش
       r.players.forEach((p) => {
         if (p.id === winnerId) return;
+        p.squad = Array.isArray(p.squad) ? p.squad : [];
         const stillNeed = p.squad.length < total && neededPositions(quota, p.squad).includes(r.auction.pos);
         if (!stillNeed) return;
-        const freeId = pickForPositions(r.availableIds, [r.auction.pos]);
+        const freeId = pickForPositions(r.availableIds || [], [r.auction.pos]);
         if (freeId) {
           const flp = playerById(freeId);
           p.squad.push({ id: flp.id, name: flp.name, pos: flp.pos, rating: flp.rating, price: 0 });
@@ -884,6 +956,13 @@ function AppInner() {
     }
     r.turnIndex = (r.turnIndex + 1) % r.players.length;
     nextRound(r);
+  }
+
+  async function resolveRoundIfExpired() {
+    const r = await getRoom(code);
+    if (!r || !r.auction || !Array.isArray(r.players)) return;
+    if (Date.now() < r.auction.deadline) return;
+    settleRound(r);
     setRoomState(await setRoom(code, r));
   }
 
@@ -898,12 +977,16 @@ function AppInner() {
 
   async function runMatch(teamAId, teamBId) {
     const r = await getRoom(code);
+    if (!r) return;
     const teamA = r.players.find((p) => p.id === teamAId);
     const teamB = r.players.find((p) => p.id === teamBId);
+    if (!teamA || !teamB) return;
     const coachA = coachById(teamA.coachId);
     const coachB = coachById(teamB.coachId);
-    const strA = teamA.squad.reduce((s, p) => s + p.rating, 0) / Math.max(1, teamA.squad.length) + (coachA?.bonus || 0);
-    const strB = teamB.squad.reduce((s, p) => s + p.rating, 0) / Math.max(1, teamB.squad.length) + (coachB?.bonus || 0);
+    const squadA = Array.isArray(teamA.squad) ? teamA.squad : [];
+    const squadB = Array.isArray(teamB.squad) ? teamB.squad : [];
+    const strA = squadA.reduce((s, p) => s + p.rating, 0) / Math.max(1, squadA.length) + (coachA?.bonus || 0);
+    const strB = squadB.reduce((s, p) => s + p.rating, 0) / Math.max(1, squadB.length) + (coachB?.bonus || 0);
     const lamA = Math.max(0.4, 1.4 + (strA - strB) / 12);
     const lamB = Math.max(0.4, 1.4 + (strB - strA) / 12);
     const scoreA = Math.min(6, poisson(lamA));
@@ -911,11 +994,20 @@ function AppInner() {
     const match = { teamA: teamA.name, teamB: teamB.name, scoreA, scoreB, loading: true };
     r.matches.push(match);
     setRoomState(await setRoom(code, r));
-    const ai = await generateMatch(teamA, teamB, scoreA, scoreB, coachA, coachB, lang);
-    const r2 = await getRoom(code);
-    const m = r2.matches[r2.matches.length - 1];
-    m.loading = false; m.commentary = ai.commentary; m.scorers = ai.scorers || []; m.motm = ai.motm || "";
-    setRoomState(await setRoom(code, r2));
+    try {
+      const ai = await generateMatch({ ...teamA, squad: squadA }, { ...teamB, squad: squadB }, scoreA, scoreB, coachA, coachB, lang);
+      const r2 = await getRoom(code);
+      const m = r2?.matches?.[r2.matches.length - 1];
+      if (m) { m.loading = false; m.commentary = ai.commentary; m.scorers = ai.scorers || []; m.motm = ai.motm || ""; }
+      if (r2) setRoomState(await setRoom(code, r2));
+    } catch (e) {
+      console.error("runMatch AI step failed:", e);
+      // حتى لو الذكاء الاصطناعي فشل تمامًا، بلّغ المباراة بدل ما تفضل "جاري التحميل" للأبد
+      const r3 = await getRoom(code);
+      const m3 = r3?.matches?.[r3.matches.length - 1];
+      if (m3) { m3.loading = false; m3.commentary = tr("انتهت المباراة، بس الذكاء الاصطناعي معملش تعليق النهاردة.", "Match finished, but AI commentary wasn't available this time."); m3.scorers = []; m3.motm = ""; }
+      if (r3) setRoomState(await setRoom(code, r3));
+    }
     if (account) addScore(account.username, 5, "شغّلت ماتش");
   }
 
@@ -960,7 +1052,7 @@ function AppInner() {
   if (!room) return <LoadingScreen room />;
 
   if (screen === "lobby") return <Lobby room={room} myId={myId} onStart={startAuction} onLeave={leaveRoom} />;
-  if (screen === "auction") return <Auction room={room} myId={myId} now={now} onBid={placeBid} onLeave={leaveRoom} />;
+  if (screen === "auction") return <Auction room={room} myId={myId} now={now} onBid={placeBid} onPass={passRound} onLeave={leaveRoom} />;
   if (screen === "teams") return <Teams room={room} myId={myId} onRunMatch={runMatch} onRunTournament={runTournament} onLeave={leaveRoom} />;
   return null;
 }
@@ -1187,10 +1279,11 @@ function Shell({ children }) {
   return (
     <div dir={dir} style={{
       background: "radial-gradient(circle at 15% 0%, #1B0F3D66 0%, transparent 45%), radial-gradient(circle at 100% 25%, #00D9FF22 0%, transparent 40%), linear-gradient(160deg,#080B1F 0%,#0A0E27 45%,#141B3D 100%)",
-      minHeight: "100vh",
+      minHeight: "100vh", position: "relative",
     }}>
       <style>{FONT_STYLE}</style>
-      <div className="max-w-md mx-auto px-4 py-6 ff-fade-up">{children}</div>
+      <StadiumBackground />
+      <div className="max-w-md mx-auto px-4 py-6 ff-fade-up" style={{ position: "relative", zIndex: 1 }}>{children}</div>
     </div>
   );
 }
@@ -1310,7 +1403,7 @@ function Lobby({ room, myId, onStart, onLeave }) {
 }
 
 // ---------- Auction ----------
-function Auction({ room, myId, now, onBid, onLeave }) {
+function Auction({ room, myId, now, onBid, onPass, onLeave }) {
   const { tr, lang } = useLang();
   if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const a = room.auction;
@@ -1326,11 +1419,15 @@ function Auction({ room, myId, now, onBid, onLeave }) {
   const quota = FORMATIONS[room.formation] || FORMATIONS["4-3-3"];
   const totalSlots = Object.values(quota).reduce((s, n) => s + n, 0);
   const canBid = me && (isCoachRound ? !me.coachId : (me.squad?.length || 0) < totalSlots && neededPositions(quota, me.squad || []).includes(a.pos));
+  const iAmTop = a.bidderId === myId;
+  const iPassed = !!a.passed?.[myId];
 
   const filledCount = room.players.reduce((s, p) => s + (p.squad?.length || 0), 0);
   const totalTarget = totalSlots * room.players.length;
   const coachesLeft = room.players.filter((p) => !p.coachId).length;
   const topBidder = a.bidderId ? room.players.find((p) => p.id === a.bidderId) : null;
+  const eligibleOthers = room.players.filter((p) => p.id !== myId && (isCoachRound ? !p.coachId : (p.squad?.length || 0) < totalSlots && neededPositions(quota, p.squad || []).includes(a.pos)));
+  const passedCount = eligibleOthers.filter((p) => a.passed?.[p.id] || p.id === a.bidderId).length;
 
   return (
     <Shell>
@@ -1343,7 +1440,7 @@ function Auction({ room, myId, now, onBid, onLeave }) {
           <div style={{ fontSize: 40 }}>🧑‍💼</div>
         ) : (
           <div className="flex justify-center mb-2">
-            <PlayerCard player={pl} lang={lang} size="lg" selected />
+            <PlayerCard key={a.playerId} player={pl} lang={lang} size="lg" selected justWon />
           </div>
         )}
         {!isCoachRound && <Chip color={cardColor}>{posLabel[pl.pos]}</Chip>}
@@ -1358,7 +1455,17 @@ function Auction({ room, myId, now, onBid, onLeave }) {
         <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>{topBidder ? topBidder.name : tr("لسه محدش زايد — يا إنت يا هما", "No bids yet — it's between whoever needs this spot")}</div>
 
         {canBid ? (
-          <LiveBidInput currentBid={a.currentBid} budget={me.budget} isTop={a.bidderId === myId} onBid={onBid} />
+          <>
+            <LiveBidInput currentBid={a.currentBid} budget={me.budget} isTop={iAmTop} onBid={onBid} />
+            {!iAmTop && (
+              <button onClick={onPass} disabled={iPassed} className="ff-body text-xs mt-2 underline" style={{ color: iPassed ? "#EEF1FF55" : "#EEF1FFAA" }}>
+                {iPassed ? tr("قلت مش هزايد — مستني الباقي", "You passed — waiting on the rest") : tr("مش هزايد على ده", "I won't bid on this")}
+              </button>
+            )}
+            {eligibleOthers.length > 0 && (
+              <div className="ff-body text-xs mt-1" style={{ color: "#EEF1FF55" }}>{tr(`${passedCount}/${eligibleOthers.length} خلصوا قرارهم`, `${passedCount}/${eligibleOthers.length} have decided`)}</div>
+            )}
+          </>
         ) : (
           <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>
             {me ? tr("مش محتاج المركز ده دلوقتي", "You don't need this spot right now") : tr("مش في اللعبة دي", "Not in this game")}
