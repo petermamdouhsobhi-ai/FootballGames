@@ -74,12 +74,20 @@ const poisson = (lambda) => { const L = Math.exp(-lambda); let k = 0, p = 1; do 
 // بيصحّح أي لاعب ببيانات ناقصة (زي غرف قديمة من نسخ سابقة من الموقع) قبل ما أي كود يستخدمها،
 // عشان أي حقل ناقص (squad/coachId/budget) ميوقّعش الكود بدل ما نلاقيه في كل مكان لوحده
 function normalizeRoomPlayers(r) {
-  if (r && Array.isArray(r.players)) {
+  if (!r) return r;
+  r.matches = Array.isArray(r.matches) ? r.matches : [];
+  r.availableIds = Array.isArray(r.availableIds) ? r.availableIds : POOL.map((p) => p.id);
+  r.formation = FORMATIONS[r.formation] ? r.formation : "4-3-3";
+  r.stage = r.stage === "coach" ? "coach" : "players";
+  r.turnIndex = Number.isInteger(r.turnIndex) ? r.turnIndex : 0;
+  if (Array.isArray(r.players)) {
     r.players = r.players.map((p) => ({
       squad: [], coachId: null, captainId: null, ready: false, total: 0, budget: r.budget || 0,
       ...p,
       squad: Array.isArray(p.squad) ? p.squad : [],
     }));
+  } else {
+    r.players = [];
   }
   return r;
 }
