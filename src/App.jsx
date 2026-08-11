@@ -782,15 +782,15 @@ function AppInner() {
     setRoomState(await setRoom(code, r));
   }
 
-  // يقرر مين دوره النشط (أول واحد لسه ناقصه لاعبين/مدرب)، يديله عرض عشوائي يناسب اللي محتاجه،
-  // وفي نفس اللحظة يدي كل اللاعبين التانيين حاجة عشوائية ببلاش لو لسه محتاجين
+  // بيحدد مين المركز اللي هيتباع دلوقتي (بيدور على أول لاعب لسه محتاج حاجة)، وبيحط لاعب/مدرب
+  // من نفس النوع للمزايدة عليه من الكل. مفيش "دور" حصري — أي حد لسه محتاج المركز ده يقدر يزايد
   function nextRound(r) {
     const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
     const total = Object.values(quota).reduce((a, b) => a + b, 0);
     const stillNeedSquad = (p) => p.squad.length < total;
 
     if (r.stage === "players" && !r.players.some(stillNeedSquad)) {
-      r.stage = "coach"; r.turnIndex = 0; r.coachPool = shuffle(COACHES.map((c) => c.id));
+      r.stage = "coach"; r.turnIndex = 0;
     }
 
     if (r.stage === "coach") {
@@ -799,78 +799,89 @@ function AppInner() {
         r.phase = "teams"; r.auction = null;
         return;
       }
-      for (let i = 0; i < r.players.length; i++) {
-        const idx = (r.turnIndex + i) % r.players.length;
-        if (stillNeedCoach(r.players[idx])) { r.turnIndex = idx; break; }
-      }
-      const active = r.players[r.turnIndex];
       const claimed = new Set(r.players.map((p) => p.coachId).filter(Boolean));
-      let leftover = COACHES.map((c) => c.id).filter((id) => !claimed.has(id));
-
-      // الباقي ياخدوا مدرب عشوائي ببلاش على طول
-      r.players.forEach((p) => {
-        if (p.id === active.id || p.coachId || !leftover.length) return;
-        const idx2 = Math.floor(Math.random() * leftover.length);
-        p.coachId = leftover.splice(idx2, 1)[0];
-        claimed.add(p.coachId);
-      });
-
-      if (!leftover.length) { r.auction = null; nextRound(r); return; }
+      const leftover = COACHES.map((c) => c.id).filter((id) => !claimed.has(id));
+      if (!leftover.length) {
+        // مفيش مدربين متبقين (نادر) — كمّل بمدرب عشوائي من الكل
+        r.players.forEach((p) => { if (!p.coachId) p.coachId = COACHES[Math.floor(Math.random() * COACHES.length)].id; });
+        r.phase = "teams"; r.auction = null;
+        return;
+      }
       const coachId = leftover[Math.floor(Math.random() * leftover.length)];
-      const coach = coachById(coachId);
-      r.auction = { activeId: active.id, coachId, price: Math.max(20000, coach.bonus * 40000), deadline: Date.now() + 15000, kind: "coach" };
+      r.auction = { coachId, currentBid: 0, bidderId: null, deadline: Date.now() + 15000, kind: "coach" };
       return;
     }
 
-    // stage === "players"
+    // stage === "players": بندوّر على مركز محتاج من أي لاعب (بالدور، بس بس عشان نحدد المركز، مش عشان نحصر المزايدة)
     for (let i = 0; i < r.players.length; i++) {
       const idx = (r.turnIndex + i) % r.players.length;
       if (stillNeedSquad(r.players[idx])) { r.turnIndex = idx; break; }
     }
-    const active = r.players[r.turnIndex];
-
-    // الباقي ياخدوا لاعب عشوائي ببلاش على طول
-    r.players.forEach((p) => {
-      if (p.id === active.id || !stillNeedSquad(p)) return;
-      const freeId = pickForPositions(r.availableIds, neededPositions(quota, p.squad));
-      if (freeId) {
-        const pl = playerById(freeId);
-        p.squad.push({ id: pl.id, name: pl.name, pos: pl.pos, rating: pl.rating, price: 0 });
-        r.availableIds = r.availableIds.filter((id) => id !== freeId);
-      }
-    });
-
-    const offeredId = pickForPositions(r.availableIds, neededPositions(quota, active.squad));
-    if (!offeredId) { r.auction = null; nextRound(r); return; }
-    const pl = playerById(offeredId);
-    r.auction = { activeId: active.id, playerId: offeredId, price: pl.base * PRICE_SCALE, deadline: Date.now() + 15000, kind: "player" };
+    const anchor = r.players[r.turnIndex];
+    const pos = neededPositions(quota, anchor.squad)[0];
+    const offeredId = pickForPositions(r.availableIds, [pos]);
+    if (!offeredId) { r.auction = null; r.turnIndex = (r.turnIndex + 1) % r.players.length; nextRound(r); return; }
+    r.auction = { pos, playerId: offeredId, currentBid: 0, bidderId: null, deadline: Date.now() + 15000, kind: "player" };
   }
 
-  async function decideOffer(buy) {
+  async function placeBid(amount) {
     const r = await getRoom(code);
-    if (!r || !r.auction || r.auction.activeId !== myId) return;
+    if (!r || !r.auction) return;
     const me = r.players.find((p) => p.id === myId);
     if (!me) return;
-    if (r.auction.kind === "coach") {
-      if (buy && me.budget >= r.auction.price) {
-        me.coachId = r.auction.coachId;
-        me.budget -= r.auction.price;
-      }
-    } else if (buy && me.budget >= r.auction.price) {
-      const pl = playerById(r.auction.playerId);
-      me.squad.push({ id: pl.id, name: pl.name, pos: pl.pos, rating: pl.rating, price: r.auction.price });
-      me.budget -= r.auction.price;
-      r.availableIds = r.availableIds.filter((id) => id !== pl.id);
-    }
-    r.turnIndex = (r.turnIndex + 1) % r.players.length;
-    nextRound(r);
+    const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
+    const total = Object.values(quota).reduce((a, b) => a + b, 0);
+    const canBid = r.auction.kind === "coach" ? !me.coachId : (me.squad.length < total && neededPositions(quota, me.squad).includes(r.auction.pos));
+    if (!canBid) return;
+    const next = Number(amount);
+    if (!next || next <= r.auction.currentBid || next > me.budget || r.auction.bidderId === myId) return;
+    r.auction.currentBid = next;
+    r.auction.bidderId = myId;
+    r.auction.deadline = Date.now() + 15000;
     setRoomState(await setRoom(code, r));
   }
 
-  async function resolveTurnIfExpired() {
+  async function resolveRoundIfExpired() {
     const r = await getRoom(code);
     if (!r || !r.auction) return;
     if (Date.now() < r.auction.deadline) return;
+    const quota = FORMATIONS[r.formation] || FORMATIONS["4-3-3"];
+    const total = Object.values(quota).reduce((a, b) => a + b, 0);
+    const winnerId = r.auction.bidderId;
+
+    if (r.auction.kind === "coach") {
+      if (winnerId) {
+        const w = r.players.find((p) => p.id === winnerId);
+        w.coachId = r.auction.coachId; w.budget -= r.auction.currentBid;
+      }
+      const claimed = new Set(r.players.map((p) => p.coachId).filter(Boolean));
+      let leftover = COACHES.map((c) => c.id).filter((id) => !claimed.has(id));
+      r.players.forEach((p) => {
+        if (p.coachId || p.id === winnerId || !leftover.length) return;
+        const idx2 = Math.floor(Math.random() * leftover.length);
+        p.coachId = leftover.splice(idx2, 1)[0];
+      });
+    } else {
+      const pl = playerById(r.auction.playerId);
+      if (winnerId) {
+        const w = r.players.find((p) => p.id === winnerId);
+        w.squad.push({ id: pl.id, name: pl.name, pos: pl.pos, rating: pl.rating, price: r.auction.currentBid });
+        w.budget -= r.auction.currentBid;
+        r.availableIds = r.availableIds.filter((id) => id !== pl.id);
+      }
+      // اللي ماخدوش يبقوا لسه محتاجين نفس المركز، ياخدوا لاعب تاني عشوائي بنفس المركز ببلاش
+      r.players.forEach((p) => {
+        if (p.id === winnerId) return;
+        const stillNeed = p.squad.length < total && neededPositions(quota, p.squad).includes(r.auction.pos);
+        if (!stillNeed) return;
+        const freeId = pickForPositions(r.availableIds, [r.auction.pos]);
+        if (freeId) {
+          const flp = playerById(freeId);
+          p.squad.push({ id: flp.id, name: flp.name, pos: flp.pos, rating: flp.rating, price: 0 });
+          r.availableIds = r.availableIds.filter((id) => id !== freeId);
+        }
+      });
+    }
     r.turnIndex = (r.turnIndex + 1) % r.players.length;
     nextRound(r);
     setRoomState(await setRoom(code, r));
@@ -879,7 +890,7 @@ function AppInner() {
   // local timer-driven resolution
   useEffect(() => {
     if (!room || room.phase !== "auction" || !room.auction) return;
-    if (now >= room.auction.deadline) resolveTurnIfExpired().catch((e) => console.error("resolveTurnIfExpired failed:", e));
+    if (now >= room.auction.deadline) resolveRoundIfExpired().catch((e) => console.error("resolveRoundIfExpired failed:", e));
     // eslint-disable-next-line
   }, [now]);
 
@@ -949,7 +960,7 @@ function AppInner() {
   if (!room) return <LoadingScreen room />;
 
   if (screen === "lobby") return <Lobby room={room} myId={myId} onStart={startAuction} onLeave={leaveRoom} />;
-  if (screen === "auction") return <Auction room={room} myId={myId} now={now} onDecide={decideOffer} onLeave={leaveRoom} />;
+  if (screen === "auction") return <Auction room={room} myId={myId} now={now} onBid={placeBid} onLeave={leaveRoom} />;
   if (screen === "teams") return <Teams room={room} myId={myId} onRunMatch={runMatch} onRunTournament={runTournament} onLeave={leaveRoom} />;
   return null;
 }
@@ -1299,7 +1310,7 @@ function Lobby({ room, myId, onStart, onLeave }) {
 }
 
 // ---------- Auction ----------
-function Auction({ room, myId, now, onDecide, onLeave }) {
+function Auction({ room, myId, now, onBid, onLeave }) {
   const { tr, lang } = useLang();
   if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   const a = room.auction;
@@ -1308,30 +1319,26 @@ function Auction({ room, myId, now, onDecide, onLeave }) {
   const pl = isCoachRound ? null : playerById(a.playerId);
   const coach = isCoachRound ? coachById(a.coachId) : null;
   if (isCoachRound ? !coach : !pl) return <RoomBroken onLeave={onLeave} />;
-  const active = room.players.find((p) => p.id === a.activeId);
-  const isMyTurn = a.activeId === myId;
   const secsLeft = Math.max(0, Math.ceil((a.deadline - now) / 1000));
   const posLabel = lang === "ar" ? POS_LABEL : POS_LABEL_EN;
   const cardColor = isCoachRound ? "#39FF88" : POS_COLOR[pl.pos];
   const me = room.players.find((p) => p.id === myId);
-  const canAfford = (me?.budget || 0) >= a.price;
-
   const quota = FORMATIONS[room.formation] || FORMATIONS["4-3-3"];
   const totalSlots = Object.values(quota).reduce((s, n) => s + n, 0);
+  const canBid = me && (isCoachRound ? !me.coachId : (me.squad?.length || 0) < totalSlots && neededPositions(quota, me.squad || []).includes(a.pos));
+
   const filledCount = room.players.reduce((s, p) => s + (p.squad?.length || 0), 0);
   const totalTarget = totalSlots * room.players.length;
   const coachesLeft = room.players.filter((p) => !p.coachId).length;
+  const topBidder = a.bidderId ? room.players.find((p) => p.id === a.bidderId) : null;
 
   return (
     <Shell>
-      <Header title={isCoachRound ? tr("مزاد المدربين", "Coach draft") : tr("المزاد جارٍ", "Draft in progress")}
+      <Header title={isCoachRound ? tr("مزاد المدربين", "Coach auction") : tr("المزاد جارٍ", "Auction in progress")}
         sub={isCoachRound ? tr(`باقي ${coachesLeft} محتاجين مدرب`, `${coachesLeft} still need a coach`) : tr(`اكتملت ${filledCount} من ${totalTarget} أماكن · التشكيلة ${room.formation}`, `${filledCount} of ${totalTarget} slots filled · Formation ${room.formation}`)}
         onLeave={onLeave} />
 
       <div className="rounded-xl p-5 mb-4 text-center" style={{ background: "#141B3D", border: `2px solid ${cardColor}55` }}>
-        <div className="ff-body text-xs font-bold mb-2" style={{ color: isMyTurn ? "#39FF88" : "#EEF1FFAA" }}>
-          {isMyTurn ? tr("🎯 دورك — قرر", "🎯 Your turn — decide") : tr(`دور ${active?.name || "..."}`, `${active?.name || "..."}'s turn`)}
-        </div>
         {isCoachRound ? (
           <div style={{ fontSize: 40 }}>🧑‍💼</div>
         ) : (
@@ -1342,20 +1349,23 @@ function Auction({ room, myId, now, onDecide, onLeave }) {
         {!isCoachRound && <Chip color={cardColor}>{posLabel[pl.pos]}</Chip>}
         <div className="ff-display text-4xl font-bold mt-1" style={{ color: "#EEF1FF" }}>{isCoachRound ? cname(coach, lang) : pname(pl, lang)}</div>
         <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{isCoachRound ? cstyle(coach, lang) : tr(`تقييم ${pl.rating}`, `Rating ${pl.rating}`)}</div>
-        <div className="ff-display text-3xl font-bold mt-2" style={{ color: "#39FF88" }}>{a.price.toLocaleString()} {tr("جنيه", "EGP")}</div>
-        <div className="ff-display text-2xl font-bold mt-2" style={{ color: "#FF3B5C" }}>{secsLeft}s</div>
+        <div className="ff-display text-2xl font-bold mt-3" style={{ color: "#FF3B5C" }}>{secsLeft}s</div>
       </div>
 
-      {isMyTurn ? (
-        <div className="flex gap-2 mb-4">
-          <Btn className="flex-1" disabled={!canAfford} onClick={() => onDecide(true)}>
-            {canAfford ? tr(`اشتري (${a.price.toLocaleString()})`, `Buy (${a.price.toLocaleString()})`) : tr("فلوسك مش كفاية", "Not enough budget")}
-          </Btn>
-          <Btn variant="ghost" className="flex-1" onClick={() => onDecide(false)}>{tr("سيبه", "Skip")}</Btn>
-        </div>
-      ) : (
-        <div className="ff-body text-center text-sm mb-4" style={{ color: "#EEF1FFAA" }}>{isCoachRound ? tr("مستنيين قراره، وإنت هتاخد مدرب عشوائي ببلاش لو لسه محتاج", "Waiting on their decision — you'll get a free random coach if you still need one") : tr("مستنيين قراره، وإنت هتاخد لاعب عشوائي ببلاش لو لسه محتاج", "Waiting on their decision — you'll get a free random player if you still need one")}</div>
-      )}
+      <div className="text-center mb-4">
+        <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{tr("أعلى عرض حاليًا", "Current top bid")}</div>
+        <div key={a.currentBid} className="ff-display text-3xl font-bold ff-pop-in" style={{ color: "#39FF88" }}>{a.currentBid.toLocaleString()} {tr("جنيه", "EGP")}</div>
+        <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>{topBidder ? topBidder.name : tr("لسه محدش زايد — يا إنت يا هما", "No bids yet — it's between whoever needs this spot")}</div>
+
+        {canBid ? (
+          <LiveBidInput currentBid={a.currentBid} budget={me.budget} isTop={a.bidderId === myId} onBid={onBid} />
+        ) : (
+          <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>
+            {me ? tr("مش محتاج المركز ده دلوقتي", "You don't need this spot right now") : tr("مش في اللعبة دي", "Not in this game")}
+          </div>
+        )}
+        <p className="ff-body text-xs mt-3" style={{ color: "#EEF1FF55" }}>{tr("اللي يكسبه يدفع ويكسبه، والباقي اللي لسه محتاجين نفس المركز ياخدوا واحد تاني عشوائي ببلاش.", "Whoever wins pays and takes them — everyone else who still needs this spot gets a different random one for free.")}</p>
+      </div>
 
       <FormationBoard room={room} myId={myId} />
     </Shell>
@@ -1363,6 +1373,24 @@ function Auction({ room, myId, now, onDecide, onLeave }) {
 }
 
 // ---------- كارت التشكيلة: يعرض كل فريق كخط حراسة/دفاع/وسط/هجوم بيتبني تدريجيًا ----------
+function LiveBidInput({ currentBid, budget, isTop, onBid }) {
+  const { tr } = useLang();
+  const [amt, setAmt] = useState("");
+  const invalid = !amt || Number(amt) <= currentBid || Number(amt) > budget;
+  if (isTop) {
+    return <div className="ff-body text-sm font-bold" style={{ color: "#39FF88" }}>{tr("إنت أعلى عرض دلوقتي 🔥", "You're the top bid right now 🔥")}</div>;
+  }
+  return (
+    <div className="flex gap-2">
+      <input type="number" className="ff-body flex-1 rounded-lg px-3 py-2.5 outline-none text-center"
+        style={{ background: "#141B3D", color: "#EEF1FF", border: "1px solid #EEF1FF33" }}
+        placeholder={tr(`اكتب عرضك (أكتر من ${currentBid.toLocaleString()})`, `Your bid (more than ${currentBid.toLocaleString()})`)}
+        value={amt} onChange={(e) => setAmt(e.target.value)} />
+      <Btn disabled={invalid} onClick={() => { onBid(Number(amt)); setAmt(""); }}>{tr("زايد", "Bid")}</Btn>
+    </div>
+  );
+}
+
 function FormationBoard({ room, myId }) {
   const { tr, lang } = useLang();
   const posLabel = lang === "ar" ? POS_LABEL : POS_LABEL_EN;
