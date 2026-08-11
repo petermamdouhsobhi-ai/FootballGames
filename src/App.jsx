@@ -66,8 +66,20 @@ const genCode = () => Array.from({ length: 5 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ2
 const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const poisson = (lambda) => { const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; };
 
+// بيصحّح أي لاعب ببيانات ناقصة (زي غرف قديمة من نسخ سابقة من الموقع) قبل ما أي كود يستخدمها،
+// عشان أي حقل ناقص (squad/coachId/budget) ميوقّعش الكود بدل ما نلاقيه في كل مكان لوحده
+function normalizeRoomPlayers(r) {
+  if (r && Array.isArray(r.players)) {
+    r.players = r.players.map((p) => ({
+      squad: [], coachId: null, captainId: null, ready: false, total: 0, budget: r.budget || 0,
+      ...p,
+      squad: Array.isArray(p.squad) ? p.squad : [],
+    }));
+  }
+  return r;
+}
 async function getRoom(code) {
-  try { const r = await window.storage.get(roomKey(code), true); return r ? JSON.parse(r.value) : null; }
+  try { const r = await window.storage.get(roomKey(code), true); return r ? normalizeRoomPlayers(JSON.parse(r.value)) : null; }
   catch { return null; }
 }
 async function setRoom(code, room) {
@@ -291,8 +303,14 @@ async function generateGwSummary(comp, events, gwNum, lang) {
 }
 
 const lgKey = (code) => "lgroom:" + code;
+function normalizeLgPlayers(r) {
+  if (r && Array.isArray(r.players)) {
+    r.players = r.players.map((p) => ({ squad: [], captainId: null, ready: false, total: 0, ...p, squad: Array.isArray(p.squad) ? p.squad : [] }));
+  }
+  return r;
+}
 async function getLgRoom(code) {
-  try { const r = await window.storage.get(lgKey(code), true); return r ? JSON.parse(r.value) : null; }
+  try { const r = await window.storage.get(lgKey(code), true); return r ? normalizeLgPlayers(JSON.parse(r.value)) : null; }
   catch { return null; }
 }
 async function setLgRoom(code, room) {
@@ -360,8 +378,14 @@ Reply with JSON only, no extra text or markdown, in exactly this shape:
 
 // ---------- Guess Who (football edition) ----------
 const gwKey = (code) => "gwroom:" + code;
+function normalizeGwPlayers(r) {
+  if (r && Array.isArray(r.players)) {
+    r.players = r.players.map((p) => ({ secretId: null, ...p }));
+  }
+  return r;
+}
 async function getGwRoom(code) {
-  try { const r = await window.storage.get(gwKey(code), true); return r ? JSON.parse(r.value) : null; }
+  try { const r = await window.storage.get(gwKey(code), true); return r ? normalizeGwPlayers(JSON.parse(r.value)) : null; }
   catch { return null; }
 }
 async function setGwRoom(code, room) {
@@ -420,8 +444,14 @@ where answer is the correct option's index (0 to 3).`;
 
 // ---------- Dream Team ----------
 const dtKey = (code) => "dtroom:" + code;
+function normalizeDtPlayers(r) {
+  if (r && Array.isArray(r.players)) {
+    r.players = r.players.map((p) => ({ squad: [], coachId: null, ready: false, ...p, squad: Array.isArray(p.squad) ? p.squad : [] }));
+  }
+  return r;
+}
 async function getDtRoom(code) {
-  try { const r = await window.storage.get(dtKey(code), true); return r ? JSON.parse(r.value) : null; }
+  try { const r = await window.storage.get(dtKey(code), true); return r ? normalizeDtPlayers(JSON.parse(r.value)) : null; }
   catch { return null; }
 }
 async function setDtRoom(code, room) {
@@ -547,9 +577,9 @@ const CARD_SIZES = {
   md: { w: 60, h: 76, num: 24, pos: 8, r: 10 },
   lg: { w: 96, h: 122, num: 38, pos: 12, r: 14 },
 };
-// أفتار توضيحي ثابت لكل لاعب (مش صور حقيقية محمية بحقوق نشر — رسمة مميزة وثابتة لكل id)
+// أفتار توضيحي ثابت لكل لاعب (مش صور حقيقية محمية بحقوق نشر — رسمة نضيفة وثابتة لكل id، ستايل مسطّح وشيك)
 function avatarUrl(id) {
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(id)}&backgroundColor=transparent&radius=50`;
+  return `https://api.dicebear.com/7.x/personas/svg?seed=${encodeURIComponent(id)}&backgroundColor=transparent&facialHairProbability=25&mouth=smile,bigSmile&eyes=open,squint&nose=mouth,round`;
 }
 function PlayerCard({ player, lang, size = "md", selected }) {
   if (!player) return null;
@@ -755,12 +785,12 @@ function AppInner() {
     return p.squad.length < r.squadSize;
   }
 
-  async function placeLiveBid() {
+  async function placeLiveBid(amount) {
     const r = await getRoom(code);
     if (!r || !r.auction || r.auction.kind !== "live") return;
     const me = r.players.find((p) => p.id === myId);
-    const step = 10;
-    const next = r.auction.currentBid + step;
+    const next = Number(amount);
+    if (!next || next <= r.auction.currentBid) return;
     if (!me || me.budget < next || !eligible(r, me) || r.auction.bidderId === myId) return;
     r.auction.currentBid = next;
     r.auction.bidderId = myId;
@@ -882,8 +912,8 @@ function AppInner() {
   // local timer-driven resolution
   useEffect(() => {
     if (!room || room.phase !== "auction" || !room.auction) return;
-    if (room.auction.kind === "live" && now >= room.auction.deadline) resolveLiveIfExpired();
-    if (room.auction.kind === "blind" && now >= room.auction.deadline) maybeResolveBlind();
+    if (room.auction.kind === "live" && now >= room.auction.deadline) resolveLiveIfExpired().catch((e) => console.error("resolveLiveIfExpired failed:", e));
+    if (room.auction.kind === "blind" && now >= room.auction.deadline) maybeResolveBlind().catch((e) => console.error("maybeResolveBlind failed:", e));
     // eslint-disable-next-line
   }, [now]);
 
@@ -1367,23 +1397,47 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
       </div>
 
       {a.kind === "live" ? (
-        <div className="text-center mb-4">
-          <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{tr("أعلى عرض حاليًا", "Current top bid")}</div>
-          <div key={a.currentBid} className="ff-display text-3xl font-bold ff-pop-in" style={{ color: "#39FF88" }}>{a.currentBid}</div>
-          <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>
-            {a.bidderId ? (room.players?.find((p) => p.id === a.bidderId)?.name || "") : tr("لا يوجد عروض بعد", "No bids yet")}
-          </div>
-          <Btn className="w-full" onClick={onLiveBid}
-            disabled={!me || me.budget < a.currentBid + 10 || (isCoach ? !!me.coachId : (me.squad?.length || 0) >= room.squadSize) || a.bidderId === myId}>
-            {tr(`زايد +10 (${a.currentBid + 10})`, `Bid +10 (${a.currentBid + 10})`)}
-          </Btn>
-        </div>
+        <LiveBidBox room={room} myId={myId} me={me} a={a} onLiveBid={onLiveBid} isCoach={isCoach} />
       ) : (
         <BlindBidBox room={room} myId={myId} a={a} bidAmt={bidAmt} setBidAmt={setBidAmt} onSubmit={onBlindBid} baseAmt={isCoach ? coachById(a.coachId).bonus * 8 : isPosition ? avgBaseForPos(a.pos) : playerById(a.playerId).base} isCoach={isCoach} />
       )}
 
       <SquadsMini room={room} myId={myId} />
     </Shell>
+  );
+}
+
+function LiveBidBox({ room, myId, me, a, onLiveBid, isCoach }) {
+  const { tr } = useLang();
+  const [amt, setAmt] = useState("");
+  const minNext = a.currentBid + 1;
+  const full = isCoach ? !!me?.coachId : (me?.squad?.length || 0) >= room.squadSize;
+  const cantBid = !me || full || a.bidderId === myId;
+  const invalid = !amt || Number(amt) <= a.currentBid || Number(amt) > (me?.budget || 0);
+
+  return (
+    <div className="text-center mb-4">
+      <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{tr("أعلى عرض حاليًا", "Current top bid")}</div>
+      <div key={a.currentBid} className="ff-display text-3xl font-bold ff-pop-in" style={{ color: "#39FF88" }}>{a.currentBid}</div>
+      <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>
+        {a.bidderId ? (room.players?.find((p) => p.id === a.bidderId)?.name || "") : tr("لا يوجد عروض بعد", "No bids yet")}
+      </div>
+      {cantBid ? (
+        <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>
+          {a.bidderId === myId ? tr("إنت أعلى عرض حاليًا", "You're the current top bidder") : tr("مش قادر تزايد دلوقتي", "You can't bid right now")}
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input type="number" className="ff-body flex-1 rounded-lg px-3 py-2.5 outline-none text-center"
+            style={{ background: "#141B3D", color: "#EEF1FF", border: "1px solid #EEF1FF33" }}
+            placeholder={tr(`اكتب عرضك (أكتر من ${a.currentBid})`, `Your bid (more than ${a.currentBid})`)}
+            value={amt} onChange={(e) => setAmt(e.target.value)} />
+          <Btn disabled={invalid} onClick={() => { onLiveBid(Number(amt)); setAmt(""); }}>
+            {tr("زايد", "Bid")}
+          </Btn>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1410,9 +1464,9 @@ function BlindBidBox({ room, myId, a, bidAmt, setBidAmt, onSubmit, baseAmt, isCo
     <div className="mb-4">
       <input type="number" className="ff-body w-full rounded-lg px-3 py-2.5 mb-2 outline-none text-center"
         style={{ background: "#141B3D", color: "#EEF1FF", border: "1px solid #EEF1FF33" }}
-        placeholder={tr(`عرضك السرّي (أساسي ${baseAmt})`, `Your secret bid (base ${baseAmt})`)} value={bidAmt} onChange={(e) => setBidAmt(e.target.value)} />
+        placeholder={tr("اكتب عرضك السرّي", "Write your secret bid")} value={bidAmt} onChange={(e) => setBidAmt(e.target.value)} />
       <div className="flex gap-2">
-        <Btn className="flex-1" disabled={!bidAmt || Number(bidAmt) < baseAmt || Number(bidAmt) > me.budget} onClick={() => onSubmit(Number(bidAmt))}>{tr("قدّم العرض", "Submit bid")}</Btn>
+        <Btn className="flex-1" disabled={!bidAmt || Number(bidAmt) <= 0 || Number(bidAmt) > me.budget} onClick={() => onSubmit(Number(bidAmt))}>{tr("قدّم العرض", "Submit bid")}</Btn>
         <Btn variant="ghost" className="flex-1" onClick={() => onSubmit(0)}>{tr("تخطى", "Skip")}</Btn>
       </div>
     </div>
