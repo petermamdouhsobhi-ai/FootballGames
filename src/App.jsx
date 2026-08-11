@@ -469,19 +469,68 @@ const FONT_STYLE = `
 .ff-glow { text-shadow: 0 0 18px currentColor, 0 0 40px currentColor; }
 @keyframes ff-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 .ff-pulse { animation: ff-pulse 2.4s ease-in-out infinite; }
+
+/* ---------- entrance / life animations ---------- */
+@keyframes ff-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ff-pop-in { from { opacity: 0; transform: scale(0.75) rotate(-4deg); } to { opacity: 1; transform: scale(1) rotate(0deg); } }
+@keyframes ff-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes ff-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes ff-spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes ff-confetti-fall { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(540deg); opacity: 0.2; } }
+@keyframes ff-goal-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ff-shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+
+.ff-fade-up { animation: ff-fade-up 0.45s cubic-bezier(.2,.8,.2,1) both; }
+.ff-pop-in { animation: ff-pop-in 0.4s cubic-bezier(.34,1.56,.64,1) both; }
+.ff-float { animation: ff-float 3.2s ease-in-out infinite; }
+.ff-shake { animation: ff-shake 0.5s ease-in-out; }
+.ff-hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.ff-hover-lift:hover { transform: translateY(-3px) scale(1.02); }
+.ff-shimmer-bg {
+  background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: ff-shimmer 2.2s ease-in-out infinite;
+}
 `;
 
 function Chip({ children, color }) {
-  return <span className="ff-body text-xs font-bold px-2 py-0.5 rounded" style={{ background: color + "22", color }}>{children}</span>;
+  return <span className="ff-body text-xs font-bold px-2 py-0.5 rounded ff-pop-in" style={{ background: color + "22", color }}>{children}</span>;
+}
+
+// ---------- Confetti burst (pure CSS, no dependencies) ----------
+function Confetti({ count = 60 }) {
+  const colors = ["#39FF88", "#00D9FF", "#FFD447", "#FF3B5C", "#A855F7", "#EEF1FF"];
+  const pieces = React.useMemo(() => Array.from({ length: count }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.6,
+    duration: 2.2 + Math.random() * 1.6,
+    size: 6 + Math.random() * 7,
+    color: colors[i % colors.length],
+    round: Math.random() > 0.5,
+  })), [count]);
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 60, overflow: "hidden" }}>
+      {pieces.map((p) => (
+        <div key={p.id} style={{
+          position: "absolute", top: 0, left: `${p.left}%`, width: p.size, height: p.size * 1.4,
+          background: p.color, borderRadius: p.round ? "999px" : "2px",
+          animation: `ff-confetti-fall ${p.duration}s ease-in ${p.delay}s forwards`,
+        }} />
+      ))}
+    </div>
+  );
 }
 
 function Btn({ children, onClick, disabled, variant = "primary", className = "" }) {
-  const base = "ff-body font-bold px-4 py-2 rounded-lg transition active:scale-95 disabled:opacity-40 disabled:active:scale-100";
+  const base = "ff-body font-bold px-4 py-2 rounded-lg transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:active:scale-100 hover:-translate-y-0.5";
   const styles = {
     primary: "text-white",
     ghost: "bg-transparent border",
   };
-  const bg = variant === "primary" ? { background: disabled ? "#00D9FF55" : "#39FF88", color: "#0A0E27" } : { borderColor: "#EEF1FF55", color: "#EEF1FF" };
+  const bg = variant === "primary"
+    ? { background: disabled ? "#00D9FF55" : "#39FF88", color: "#0A0E27", boxShadow: disabled ? "none" : "0 4px 14px #39FF8855" }
+    : { borderColor: "#EEF1FF55", color: "#EEF1FF" };
   return <button onClick={onClick} disabled={disabled} className={base + " " + styles[variant] + " " + className} style={bg}>{children}</button>;
 }
 
@@ -496,23 +545,37 @@ const CARD_SIZES = {
   md: { w: 60, h: 76, num: 24, pos: 8, r: 10 },
   lg: { w: 96, h: 122, num: 38, pos: 12, r: 14 },
 };
+// أفتار توضيحي ثابت لكل لاعب (مش صور حقيقية محمية بحقوق نشر — رسمة مميزة وثابتة لكل id)
+function avatarUrl(id) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(id)}&backgroundColor=transparent&radius=50`;
+}
 function PlayerCard({ player, lang, size = "md", selected }) {
   if (!player) return null;
   const color = POS_COLOR[player.pos] || "#39FF88";
   const num = jerseyNumber(player.id);
   const d = CARD_SIZES[size];
   const posLabel = (lang === "ar" ? POS_LABEL : POS_LABEL_EN)[player.pos];
+  const avatarSize = Math.round(d.w * 0.72);
   return (
-    <div style={{
+    <div className="ff-hover-lift ff-pop-in" style={{
       width: d.w, height: d.h, borderRadius: d.r, flexShrink: 0,
       background: `linear-gradient(160deg, ${color}40 0%, #0A0E27E6 65%)`,
       border: `1.5px solid ${selected ? color : color + "55"}`,
       boxShadow: selected ? `0 0 14px ${color}AA` : "none",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative",
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden",
     }}>
-      <div style={{ position: "absolute", top: 4, insetInlineStart: 4, width: 7, height: 7, borderRadius: 999, background: color }} />
-      <div className="ff-display" style={{ fontSize: d.num, fontWeight: 700, color: "#EEF1FF", lineHeight: 1 }}>{num}</div>
-      <div className="ff-body" style={{ fontSize: d.pos, color, fontWeight: 700, marginTop: 2 }}>{posLabel}</div>
+      {selected && <div className="ff-shimmer-bg" style={{ position: "absolute", inset: 0 }} />}
+      <div style={{ position: "absolute", top: 4, insetInlineStart: 4, width: 7, height: 7, borderRadius: 999, background: color, zIndex: 2 }} />
+      <div style={{
+        width: avatarSize, height: avatarSize, borderRadius: "999px", overflow: "hidden",
+        background: `radial-gradient(circle, ${color}33 0%, transparent 70%)`,
+        border: `1px solid ${color}66`, marginBottom: size === "sm" ? 1 : 2, zIndex: 1,
+      }}>
+        <img src={avatarUrl(player.id)} alt="" width={avatarSize} height={avatarSize}
+          style={{ width: "100%", height: "100%", display: "block" }} loading="lazy" />
+      </div>
+      {size !== "sm" && <div className="ff-display" style={{ fontSize: d.num * 0.6, fontWeight: 700, color: "#EEF1FF88", lineHeight: 1, position: "absolute", bottom: size === "lg" ? 6 : 3, insetInlineEnd: 6 }}>{num}</div>}
+      <div className="ff-body" style={{ fontSize: d.pos, color, fontWeight: 700, zIndex: 1 }}>{posLabel}</div>
     </div>
   );
 }
@@ -903,8 +966,9 @@ function Splash({ onStart }) {
     }}>
       <style>{FONT_STYLE}</style>
       <div className="max-w-md w-full px-6 text-center">
-        <div className="ff-body text-xs font-bold tracking-widest mb-3" style={{ color: "#00D9FF" }}>⚽ FOOTBALL GAMES HUB ⚽</div>
-        <div className="ff-display font-bold ff-glow ff-pulse" style={{ fontSize: lang === "ar" ? 50 : 64, lineHeight: 1, color: "#39FF88" }}>
+        <div className="ff-float" style={{ fontSize: 54, marginBottom: 4 }}>⚽</div>
+        <div className="ff-body text-xs font-bold tracking-widest mb-3 ff-fade-up" style={{ color: "#00D9FF", animationDelay: "0.1s" }}>FOOTBALL GAMES HUB</div>
+        <div className="ff-display font-bold ff-glow ff-pulse ff-pop-in" style={{ fontSize: lang === "ar" ? 50 : 64, lineHeight: 1, color: "#39FF88", animationDelay: "0.15s" }}>
           {tr("ألعاب الكورة", "FOOTBALL")}
         </div>
         {lang !== "ar" && (
@@ -981,7 +1045,7 @@ function Dashboard({ account, onExit, onLogout }) {
       ) : (
         <div className="space-y-2 mb-4">
           {board.slice(0, 20).map((u, i) => (
-            <div key={u.username} className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: u.username === account.username ? "#39FF8822" : "#141B3D" }}>
+            <div key={u.username} className="flex justify-between items-center px-3 py-2 rounded-lg ff-fade-up ff-hover-lift" style={{ background: u.username === account.username ? "#39FF8822" : "#141B3D", animationDelay: `${i * 0.04}s` }}>
               <span className="ff-body" style={{ color: "#EEF1FF" }}>{i + 1}. {u.username}</span>
               <span className="ff-body font-bold" style={{ color: "#39FF88" }}>{u.score || 0}</span>
             </div>
@@ -998,27 +1062,98 @@ function Hub({ onPick, account }) {
   return (
     <Shell>
       <div className="text-center mb-8">
-        <div className="ff-display text-5xl font-bold" style={{ color: "#39FF88" }}>{tr("ألعاب الكورة", "Football Games")}</div>
+        <div className="ff-display text-4xl font-bold" style={{ color: "#39FF88" }}>{tr("ألعاب الكورة", "Football Games")}</div>
         <p className="ff-body text-sm mt-1" style={{ color: "#EEF1FFAA" }}>{tr(`أهلاً ${account?.username} — اختار اللعبة اللي عايز تلعبها`, `Hi ${account?.username} — pick a game to play`)}</p>
       </div>
-      <div className="space-y-4">
-        <GameCard title={tr("🏆 لوحة المتصدرين", "🏆 Leaderboard")} desc={tr("سكورك وترتيبك بين كل اللاعبين اللي بيسجلوا في كل الألعاب", "Your score and rank among everyone who plays")} onClick={() => onPick("dashboard")} />
-        <GameCard title={tr("الدوري الفانتازي", "Fantasy League")} desc={tr("اختار دوري (إنجليزي، مصري، سعودي، إسباني، إيطالي، أو أبطال أوروبا)، ادرافت تشكيلتك، والذكاء الاصطناعي يحاكي كل جولة ويوزّع النقط", "Pick a league (Premier, Egyptian, Saudi, La Liga, Serie A, or Champions League), draft your XI, and AI simulates each gameweek")} onClick={() => onPick("league")} />
-        <GameCard title={tr("مزاد الفانتازي", "Fantasy Auction")} desc={tr("كوّن فريقك بالمزاد مع أصحابك أونلاين، والعب ماتش أو بطولة كاملة بتعليق الذكاء الاصطناعي", "Build your squad in a live auction with friends, then play a match or full tournament with AI commentary")} onClick={() => onPick("auction")} />
-        <GameCard title={tr("خمّن اللاعب", "Guess the Player")} desc={tr("3 أشكال مختلفة: أسئلة، مسار الانتقالات، وجايزة في سنة", "3 modes: Q&A, transfer path, and award-in-a-year")} onClick={() => onPick("guess-menu")} />
-        <GameCard title={tr("تشكيلة الأحلام", "Dream Team")} desc={tr("كل واحد يختار أفضل 11 لاعب في رأيه، وتتقارن التشكيلات بالتقييم وأسلوب اللعب", "Everyone drafts their best XI, then teams are ranked by rating and playing style")} onClick={() => onPick("dream")} />
-        <GameCard title={tr("تريفيا الكورة", "Football Trivia")} desc={tr("أسئلة اختيارات متعددة عن الكورة، لوحدك، وشوف كام من 8 هتجاوب صح", "Solo multiple-choice football trivia — see how many of 8 you get right")} onClick={() => onPick("trivia")} />
+      <div className="space-y-3">
+        <GameCard index={0} color="#FFD447" icon={<IconTrophy color="#FFD447" />} title={tr("لوحة المتصدرين", "Leaderboard")} desc={tr("سكورك وترتيبك بين كل اللاعبين اللي بيسجلوا في كل الألعاب", "Your score and rank among everyone who plays")} onClick={() => onPick("dashboard")} />
+        <GameCard index={1} color="#00D9FF" icon={<IconCup color="#00D9FF" />} title={tr("الدوري الفانتازي", "Fantasy League")} desc={tr("اختار دوري، ادرافت تشكيلتك، والذكاء الاصطناعي يحاكي كل جولة", "Pick a league, draft your XI, AI simulates each gameweek")} onClick={() => onPick("league")} />
+        <GameCard index={2} color="#39FF88" icon={<IconGavel color="#39FF88" />} title={tr("مزاد الفانتازي", "Fantasy Auction")} desc={tr("كوّن فريقك بالمزاد مع أصحابك، والعب بتعليق الذكاء الاصطناعي", "Build your squad in a live auction, play with AI commentary")} onClick={() => onPick("auction")} />
+        <GameCard index={3} color="#A855F7" icon={<IconSearch color="#A855F7" />} title={tr("خمّن اللاعب", "Guess the Player")} desc={tr("3 أشكال: أسئلة، مسار الانتقالات، وجايزة في سنة", "3 modes: Q&A, transfer path, award-in-a-year")} onClick={() => onPick("guess-menu")} />
+        <GameCard index={4} color="#FF3B5C" icon={<IconShirt color="#FF3B5C" />} title={tr("تشكيلة الأحلام", "Dream Team")} desc={tr("اختار أفضل 11 لاعب، وقارن تشكيلتك بالباقي", "Draft your best XI and compare with everyone else")} onClick={() => onPick("dream")} />
+        <GameCard index={5} color="#2E8FFF" icon={<IconQuiz color="#2E8FFF" />} title={tr("تريفيا الكورة", "Football Trivia")} desc={tr("أسئلة اختيارات متعددة، لوحدك، شوف كام هتجاوب صح", "Solo multiple-choice trivia — see how many you get right")} onClick={() => onPick("trivia")} />
       </div>
     </Shell>
   );
 }
 
-function GameCard({ title, desc, onClick }) {
+// ---------- Game icons (inline SVG, no external images needed — crisp at any size) ----------
+function IconTrophy({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z" />
+      <path d="M7 6H4a2 2 0 0 0 0 4h1M17 6h3a2 2 0 0 1 0 4h-1" />
+    </svg>
+  );
+}
+function IconCup({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 3h14l-1 9a6 6 0 0 1-12 0L5 3Z" />
+      <path d="M9 21h6M12 17v4" />
+    </svg>
+  );
+}
+function IconGavel({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m14.5 4.5 5 5L15 14l-5-5 4.5-4.5Z" />
+      <path d="m9 10-6.5 6.5M13 14l6.5 6.5M3 21h6" />
+    </svg>
+  );
+}
+function IconSearch({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+function IconShirt({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3 4 6l1 3 2-1v11h10V8l2 1 1-3-4-3-2 2h-2L8 3Z" />
+    </svg>
+  );
+}
+function IconQuiz({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.7-2.3 3.3" /><circle cx="12" cy="16.5" r="0.6" fill={color} />
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}
+
+function IconBall({ color, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8.5 15.5 11l-1.3 4H9.8l-1.3-4L12 8.5Z" />
+      <path d="M12 8.5V4.5M15.5 11l3.6-1.2M14.2 15l2.2 3.3M9.8 15l-2.2 3.3M8.5 11 4.9 9.8" />
+    </svg>
+  );
+}
+
+function GameCard({ title, desc, onClick, index = 0, icon, color = "#39FF88" }) {
   const { dir } = useLang();
   return (
-    <button onClick={onClick} className="w-full rounded-xl p-5 transition active:scale-95" style={{ background: "#141B3D", border: "1px solid #39FF8855", textAlign: dir === "rtl" ? "right" : "left" }}>
-      <div className="ff-display text-2xl font-bold" style={{ color: "#39FF88" }}>{title}</div>
-      <div className="ff-body text-sm mt-1" style={{ color: "#EEF1FFAA" }}>{desc}</div>
+    <button onClick={onClick} className="ff-fade-up ff-hover-lift w-full rounded-xl p-4 transition active:scale-95 flex items-center gap-3"
+      style={{ background: "#141B3D", border: "1px solid #39FF8833", textAlign: dir === "rtl" ? "right" : "left", animationDelay: `${index * 0.07}s` }}>
+      <div style={{
+        width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+        background: `linear-gradient(150deg, ${color}33 0%, ${color}11 100%)`, border: `1px solid ${color}55`,
+      }}>
+        {icon || <IconBall color={color} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="ff-body font-bold text-base" style={{ color: "#EEF1FF" }}>{title}</div>
+        <div className="ff-body text-xs mt-0.5 leading-snug" style={{ color: "#EEF1FF88" }}>{desc}</div>
+      </div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ flexShrink: 0, transform: dir === "rtl" ? "rotate(180deg)" : "none" }}>
+        <path d="m9 6 6 6-6 6" />
+      </svg>
     </button>
   );
 }
@@ -1031,7 +1166,7 @@ function Shell({ children }) {
       minHeight: "100vh",
     }}>
       <style>{FONT_STYLE}</style>
-      <div className="max-w-md mx-auto px-4 py-6">{children}</div>
+      <div className="max-w-md mx-auto px-4 py-6 ff-fade-up">{children}</div>
     </div>
   );
 }
@@ -1213,7 +1348,7 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
       {a.kind === "live" ? (
         <div className="text-center mb-4">
           <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{tr("أعلى عرض حاليًا", "Current top bid")}</div>
-          <div className="ff-display text-3xl font-bold" style={{ color: "#39FF88" }}>{a.currentBid}</div>
+          <div key={a.currentBid} className="ff-display text-3xl font-bold ff-pop-in" style={{ color: "#39FF88" }}>{a.currentBid}</div>
           <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>
             {a.bidderId ? (room.players.find((p) => p.id === a.bidderId)?.name || "") : tr("لا يوجد عروض بعد", "No bids yet")}
           </div>
@@ -1653,9 +1788,10 @@ function GwPlay({ room, myId, onAsk, onAnswer, onGuess, onRematch, onLeave, elim
     const won = room.winnerId === myId;
     return (
       <Shell>
+        {won && <Confetti />}
         <Header title={tr("خلصت اللعبة", "Game over")} onLeave={onLeave} />
-        <div className="rounded-xl p-5 mb-5 text-center" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
-          <div className="ff-display text-3xl font-bold mb-2" style={{ color: "#39FF88" }}>{won ? tr("🎉 كسبت!", "🎉 You won!") : tr(`${room.players.find((p) => p.id === room.winnerId)?.name} كسب`, `${room.players.find((p) => p.id === room.winnerId)?.name} won`)}</div>
+        <div className={"rounded-xl p-5 mb-5 text-center " + (won ? "ff-pop-in" : "ff-fade-up")} style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
+          <div className={"ff-display text-3xl font-bold mb-2 " + (won ? "ff-float" : "")} style={{ color: "#39FF88" }}>{won ? tr("🎉 كسبت!", "🎉 You won!") : tr(`${room.players.find((p) => p.id === room.winnerId)?.name} كسب`, `${room.players.find((p) => p.id === room.winnerId)?.name} won`)}</div>
           <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>
             {tr(`لاعبك كان: ${pname(mySecret, lang)} · لاعب ${opp?.name} كان: ${pname(playerById(opp?.secretId), lang)}`, `Your player was: ${pname(mySecret, lang)} · ${opp?.name}'s player was: ${pname(playerById(opp?.secretId), lang)}`)}
           </div>
@@ -1776,9 +1912,10 @@ function Trivia({ onExit, account }) {
   if (phase === "done") {
     return (
       <Shell>
+        {score === qs.length && <Confetti />}
         <Header title={tr("خلصت التريفيا", "Trivia complete")} onLeave={onExit} />
-        <div className="rounded-xl p-6 text-center" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
-          <div className="ff-display text-5xl font-bold mb-2" style={{ color: "#39FF88" }}>{score}/{qs.length}</div>
+        <div className="rounded-xl p-6 text-center ff-pop-in" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
+          <div className={"ff-display text-5xl font-bold mb-2 " + (score === qs.length ? "ff-float" : "")} style={{ color: "#39FF88" }}>{score}/{qs.length}</div>
           <p className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>
             {score === qs.length ? tr("ممتاز! معلوماتك في الكورة جامدة 🔥", "Perfect! Your football knowledge is elite 🔥") : score >= qs.length / 2 ? tr("مش وحش خالص!", "Not bad at all!") : tr("محتاج تراجع كورة شوية 😅", "Might want to brush up a bit 😅")}
           </p>
@@ -2110,9 +2247,9 @@ function GuessHub({ onPick, onBack }) {
         <p className="ff-body text-sm mt-1" style={{ color: "#EEF1FFAA" }}>{tr("اختار الطريقة اللي عايز تلعب بيها", "Pick how you want to play")}</p>
       </div>
       <div className="space-y-4">
-        <GameCard title={tr("أسئلة (لشخصين)", "Q&A (2 players)")} desc={tr("كل واحد معاه لاعب سرّي، اسألوا بعض بنعم ولأ لحد ما تكتشفوا لاعب خصمكم", "Each of you has a secret player — ask yes/no questions until you figure out your opponent's")} onClick={() => onPick("guess-qa")} />
-        <GameCard title={tr("مسار الانتقالات", "Transfer Path")} desc={tr("بنوريك أندية اللاعب بالترتيب واحد واحد، وكل ما تخمن بعروض أقل تاخد نقط أكتر", "We reveal a player's clubs one by one — the fewer reveals you need, the more points you get")} onClick={() => onPick("guess-transfers")} />
-        <GameCard title={tr("جايزة في سنة", "Award in a Year")} desc={tr("بنقولك جايزة وسنة معينة، وانت تخمن مين اللاعب اللي كسبها", "We name an award and a year — you guess who won it")} onClick={() => onPick("guess-awards")} />
+        <GameCard index={0} color="#2E8FFF" icon={<IconQuiz color="#2E8FFF" />} title={tr("أسئلة (لشخصين)", "Q&A (2 players)")} desc={tr("كل واحد معاه لاعب سرّي، اسألوا بعض بنعم ولأ لحد ما تكتشفوا لاعب خصمكم", "Each of you has a secret player — ask yes/no questions until you figure out your opponent's")} onClick={() => onPick("guess-qa")} />
+        <GameCard index={1} color="#A855F7" icon={<IconSearch color="#A855F7" />} title={tr("مسار الانتقالات", "Transfer Path")} desc={tr("بنوريك أندية اللاعب بالترتيب واحد واحد، وكل ما تخمن بعروض أقل تاخد نقط أكتر", "We reveal a player's clubs one by one — the fewer reveals you need, the more points you get")} onClick={() => onPick("guess-transfers")} />
+        <GameCard index={2} color="#FFD447" icon={<IconTrophy color="#FFD447" />} title={tr("جايزة في سنة", "Award in a Year")} desc={tr("بنقولك جايزة وسنة معينة، وانت تخمن مين اللاعب اللي كسبها", "We name an award and a year — you guess who won it")} onClick={() => onPick("guess-awards")} />
       </div>
     </Shell>
   );
@@ -2153,9 +2290,10 @@ function TransferPath({ onExit, account }) {
   if (result) {
     return (
       <Shell>
+        {result.score >= path.length && <Confetti count={40} />}
         <Header title={tr("مسار الانتقالات", "Transfer Path")} onLeave={onExit} />
-        <div className="rounded-xl p-6 text-center" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
-          <div className="ff-display text-4xl font-bold mb-2" style={{ color: "#39FF88" }}>🎉 {pname(target, lang)}</div>
+        <div className="rounded-xl p-6 text-center ff-pop-in" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
+          <div className="ff-display text-4xl font-bold mb-2 ff-float" style={{ color: "#39FF88" }}>🎉 {pname(target, lang)}</div>
           <p className="ff-body text-sm mb-3" style={{ color: "#EEF1FFAA" }}>{tr(`كسبت ${result.score} نقطة (خمّنت بـ ${revealCount} من ${path.length} نادي)`, `You scored ${result.score} points (guessed with ${revealCount} of ${path.length} clubs shown)`)}</p>
           <div className="flex flex-wrap gap-1.5 justify-center mb-4">
             {path.map((t, i) => <Chip key={i} color="#00D9FF">{clubText(t, lang)} · {t.year}</Chip>)}
@@ -2238,9 +2376,10 @@ function AwardYearQuiz({ onExit, account }) {
   if (phase === "done") {
     return (
       <Shell>
+        {score === qs.length && <Confetti />}
         <Header title={tr("جايزة في سنة", "Award in a Year")} onLeave={onExit} />
-        <div className="rounded-xl p-6 text-center" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
-          <div className="ff-display text-5xl font-bold mb-2" style={{ color: "#39FF88" }}>{score}/{qs.length}</div>
+        <div className="rounded-xl p-6 text-center ff-pop-in" style={{ background: "#141B3D", border: "1px solid #39FF8855" }}>
+          <div className={"ff-display text-5xl font-bold mb-2 " + (score === qs.length ? "ff-float" : "")} style={{ color: "#39FF88" }}>{score}/{qs.length}</div>
           <Btn className="mt-4 w-full" onClick={restart}>{tr("أسئلة جديدة", "New questions")}</Btn>
         </div>
       </Shell>
@@ -2441,8 +2580,8 @@ function LgCompPicker({ onPick, onBack }) {
         <p className="ff-body text-sm mt-1" style={{ color: "#EEF1FFAA" }}>{tr("اختار الدوري اللي عايز تعمل فانتازي ليه", "Pick which league you want a fantasy team for")}</p>
       </div>
       <div className="space-y-3">
-        {Object.values(COMPETITIONS).map((c) => (
-          <GameCard key={c.id} title={compName(c, lang)} desc={compShort(c, lang)} onClick={() => onPick(c.id)} />
+        {Object.values(COMPETITIONS).map((c, i) => (
+          <GameCard key={c.id} index={i} color="#00D9FF" icon={<IconCup color="#00D9FF" />} title={compName(c, lang)} desc={compShort(c, lang)} onClick={() => onPick(c.id)} />
         ))}
       </div>
       <p className="ff-body text-xs text-center mt-6" style={{ color: "#EEF1FF55" }}>{tr("قوائم اللاعبين تقريبية وممكن تتغير مع الانتقالات، بس كفاية عشان تلعبوا الفانتازي.", "Player lists are approximate and may shift with transfers, but they're enough to play fantasy.")}</p>
@@ -2578,7 +2717,7 @@ function LgPlay({ room, myId, comp, onRunGameweek, onLeave }) {
       <Header title={compName(comp, lang)} sub={tr(`الجولة الحالية: ${room.gameweeks.length}`, `Current gameweek: ${room.gameweeks.length}`)} onLeave={onLeave} />
       <div className="space-y-2 mb-5">
         {standings.map((p, i) => (
-          <div key={p.id} className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: i === 0 ? "#39FF8822" : "#141B3D" }}>
+          <div key={p.id} className="flex justify-between items-center px-3 py-2 rounded-lg ff-fade-up ff-hover-lift" style={{ background: i === 0 ? "#39FF8822" : "#141B3D", animationDelay: `${i * 0.04}s` }}>
             <span className="ff-body" style={{ color: "#EEF1FF" }}>{i === 0 ? "🏆 " : `${i + 1}. `}{p.name}{p.id === myId ? tr(" (أنت)", " (you)") : ""}</span>
             <span className="ff-body font-bold" style={{ color: "#39FF88" }}>{tr(`${p.total} نقطة`, `${p.total} pts`)}</span>
           </div>
