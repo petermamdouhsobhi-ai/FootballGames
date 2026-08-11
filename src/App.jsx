@@ -16,21 +16,96 @@ function detectLang() {
 
 // ---------- Player pool ----------
 const RAW_POOL = [
+  // ---------- حراس مرمى (حاليين + أساطير) ----------
   ["تير شتيجن", "Ter Stegen", "GK", 86], ["أليسون", "Alisson", "GK", 87], ["كورتوا", "Courtois", "GK", 88], ["بونو", "Bounou", "GK", 85],
   ["الشناوي", "El Shenawy", "GK", 80], ["أونانا", "Onana", "GK", 84], ["إيديرسون", "Ederson", "GK", 86], ["نوير", "Neuer", "GK", 87], ["دوناروما", "Donnarumma", "GK", 87],
+  ["بوفون", "Buffon", "GK", 91], ["كاسياس", "Casillas", "GK", 90], ["فان دير سار", "Van der Sar", "GK", 89], ["ليڤ ياشين", "Lev Yashin", "GK", 90],
+  ["أوليفر كان", "Oliver Kahn", "GK", 90], ["زيتشيتي", "Zenga", "GK", 84], ["ناواس", "Navas", "GK", 85], ["أوبلاك", "Oblak", "GK", 89],
+  // ---------- مدافعين (حاليين + أساطير) ----------
   ["فان دايك", "Van Dijk", "DEF", 88], ["حكيمي", "Hakimi", "DEF", 87], ["روديجر", "Rüdiger", "DEF", 84], ["ماركينيوس", "Marquinhos", "DEF", 85], ["ميليتاو", "Militão", "DEF", 83],
   ["ألابا", "Alaba", "DEF", 84], ["دياس", "Dias", "DEF", 87], ["سالبا", "Saliba", "DEF", 85], ["أراوخو", "Araújo", "DEF", 85], ["تيو هيرنانديز", "Theo Hernández", "DEF", 86],
   ["تريبير", "Trippier", "DEF", 83], ["كانسيلو", "Cancelo", "DEF", 85], ["كونات", "Konaté", "DEF", 84], ["أوباميكانو", "Upamecano", "DEF", 83], ["جفارديول", "Gvardiol", "DEF", 85],
   ["ووكر", "Walker", "DEF", 83], ["ألكسندر أرنولد", "Alexander-Arnold", "DEF", 86],
+  ["مالديني", "Maldini", "DEF", 93], ["بيكنباور", "Beckenbauer", "DEF", 93], ["بويول", "Puyol", "DEF", 89], ["كافو", "Cafu", "DEF", 88], ["روبيرتو كارلوس", "Roberto Carlos", "DEF", 89],
+  ["نيستا", "Nesta", "DEF", 90], ["كانافارو", "Cannavaro", "DEF", 90], ["تير", "Thuram", "DEF", 87], ["فيران بويج", "Ferdinand", "DEF", 88], ["تيري", "Terry", "DEF", 89],
+  ["راميوس", "Ramos", "DEF", 91], ["بيكيه", "Piqué", "DEF", 87], ["مارسيلو", "Marcelo", "DEF", 87], ["باوند", "Baresi", "DEF", 91], ["سول كامبل", "Sol Campbell", "DEF", 84],
+  // ---------- وسط (حاليين + أساطير) ----------
   ["دي بروين", "De Bruyne", "MID", 90], ["مودريتش", "Modrić", "MID", 85], ["كروس", "Kroos", "MID", 84], ["رودري", "Rodri", "MID", 90], ["بيدري", "Pedri", "MID", 87],
   ["بيلينجهام", "Bellingham", "MID", 91], ["محرز", "Mahrez", "MID", 84], ["زياش", "Ziyech", "MID", 82], ["إمام عاشور", "Emam Ashour", "MID", 76],
   ["فالفيردي", "Valverde", "MID", 87], ["كامافينجا", "Camavinga", "MID", 84], ["جوندوجان", "Gündoğan", "MID", 85],
+  ["زيدان", "Zidane", "MID", 94], ["إنييستا", "Iniesta", "MID", 92], ["تشافي", "Xavi", "MID", 91], ["بيرلو", "Pirlo", "MID", 91], ["جيراسي", "Gerrard", "MID", 90],
+  ["لامبارد", "Lampard", "MID", 89], ["كايتا", "Keïta", "MID", 82], ["فييرا", "Vieira", "MID", 88], ["شافتشينكو", "Shevchenko", "MID", 89], ["ماتيوس", "Matthäus", "MID", 91],
+  ["دي ستيفانو", "Di Stéfano", "MID", 93], ["بوسكيتس", "Busquets", "MID", 87], ["كانتي", "Kanté", "MID", 87], ["فيرناندينيو", "Fernandinho", "MID", 85], ["كاسيميرو", "Casemiro", "MID", 86],
+  // ---------- مهاجمين (حاليين + أساطير) ----------
   ["مبابي", "Mbappé", "FWD", 95], ["هالاند", "Haaland", "FWD", 94], ["فينيسيوس", "Vinícius Jr.", "FWD", 92], ["ميسي", "Messi", "FWD", 90], ["محمد صلاح", "Mohamed Salah", "FWD", 90],
   ["كين", "Kane", "FWD", 89], ["ليفاندوفسكي", "Lewandowski", "FWD", 88], ["نيمار", "Neymar", "FWD", 87], ["جريزمان", "Griezmann", "FWD", 86], ["بنزيما", "Benzema", "FWD", 87],
   ["أوسيمين", "Osimhen", "FWD", 86], ["كفاراتسخيليا", "Kvaratskhelia", "FWD", 87], ["فودين", "Foden", "FWD", 88], ["ساكا", "Saka", "FWD", 87], ["موسيالا", "Musiala", "FWD", 87],
   ["ساديو ماني", "Sadio Mané", "FWD", 86], ["عمر مرموش", "Omar Marmoush", "FWD", 84], ["تريزيجيه", "Trezeguet", "FWD", 78],
+  ["رونالدو (البرازيلي)", "Ronaldo Nazário", "FWD", 95], ["كريستيانو رونالدو", "Cristiano Ronaldo", "FWD", 94], ["بيليه", "Pelé", "FWD", 96], ["مارادونا", "Maradona", "FWD", 96],
+  ["كرويف", "Cruyff", "FWD", 93], ["رونالدينيو", "Ronaldinho", "FWD", 93], ["هنري", "Henry", "FWD", 91], ["دروجبا", "Drogba", "FWD", 89], ["سواريز", "Suárez", "FWD", 90],
+  ["كافاني", "Cavani", "FWD", 87], ["إبراهيموفيتش", "Ibrahimović", "FWD", 90], ["فان بيرسي", "Van Persie", "FWD", 88], ["روني", "Rooney", "FWD", 89], ["فان باستن", "Van Basten", "FWD", 92],
+  ["رومارينيو", "Romário", "FWD", 92], ["إيوسيبيو", "Eusébio", "FWD", 91], ["بوبيتش", "Puskás", "FWD", 92], ["راؤول", "Raúl", "FWD", 88], ["توتي", "Totti", "FWD", 89],
+  ["ديل بييرو", "Del Piero", "FWD", 88], ["أوين", "Owen", "FWD", 86], ["كلوزه", "Klose", "FWD", 85], ["إيتو", "Eto'o", "FWD", 88],
+  // ---------- توسعة: نجوم حاليين من دوريات إضافية + أساطير أكتر (كلهم حقيقيين ومعروفين) ----------
+  ["سومر", "Sommer", "GK", 84], ["كيبا", "Kepa", "GK", 83], ["رامسديل", "Ramsdale", "GK", 82], ["بيكفورد", "Pickford", "GK", 84],
+  ["أريولا", "Areola", "GK", 82], ["ليفاكوفيتش", "Livaković", "GK", 84], ["زتشيسني", "Szczęsny", "GK", 84], ["ماماردافيلي", "Mamardashvili", "GK", 83],
+  ["فان دي فين", "Van de Ven", "DEF", 84], ["جابرييل ماجالهايش", "Gabriel Magalhães", "DEF", 86], ["كيم مين جاي", "Kim Min-jae", "DEF", 85],
+  ["باستوني", "Bastoni", "DEF", 86], ["سكرينيار", "Škriniar", "DEF", 84], ["ديني", "Digne", "DEF", 82], ["جويحي", "Guéhi", "DEF", 83],
+  ["تيمبر", "Timber", "DEF", 83], ["دي ليخت", "De Ligt", "DEF", 84], ["هومليز", "Hummels", "DEF", 85], ["باڤار", "Pavard", "DEF", 83],
+  ["كوندي", "Koundé", "DEF", 85], ["ناتشو", "Nacho", "DEF", 82], ["كارباخال", "Carvajal", "DEF", 86], ["فرلاند مندي", "Ferland Mendy", "DEF", 83],
+  ["ألفونسو ديفيز", "Alphonso Davies", "DEF", 86], ["زينتشينكو", "Zinchenko", "DEF", 82], ["كوكوريا", "Cucurella", "DEF", 82],
+  ["كريستيان روميرو", "Cristian Romero", "DEF", 85], ["ليساندرو مارتينيز", "Lisandro Martínez", "DEF", 84], ["أوتامندي", "Otamendi", "DEF", 81],
+  ["لام", "Lahm", "DEF", 90], ["فيراتي", "Verratti", "MID", 87], ["رايس", "Declan Rice", "MID", 87], ["كيميش", "Kimmich", "MID", 88],
+  ["فيرتس", "Wirtz", "MID", 88], ["فرنانديز", "Bruno Fernandes", "MID", 87], ["أوديجارد", "Ødegaard", "MID", 87], ["إنزو فرنانديز", "Enzo Fernández", "MID", 86],
+  ["ماك أليستر", "Mac Allister", "MID", 85], ["تشوامينى", "Tchouaméni", "MID", 85], ["أردا جولر", "Arda Güler", "MID", 82], ["زوبيمندي", "Zubimendi", "MID", 84],
+  ["بالينيا", "Palhinha", "MID", 83], ["رايندرز", "Reijnders", "MID", 84], ["باريلا", "Barella", "MID", 86],
+  ["بيرجكامب", "Bergkamp", "FWD", 91], ["فيجو", "Figo", "MID", 90], ["نيدفيد", "Nedvěd", "MID", 89], ["سيدورف", "Seedorf", "MID", 88],
+  ["كاكا", "Kaká", "MID", 90], ["ريكيلمي", "Riquelme", "MID", 88], ["باتيستوتا", "Batistuta", "FWD", 90], ["ويا", "Weah", "FWD", 88],
+  ["بالاك", "Ballack", "MID", 88], ["إفنبرج", "Effenberg", "MID", 85], ["سنايدر", "Sneijder", "MID", 87], ["روبن", "Robben", "FWD", 89],
+  ["فورلان", "Forlán", "FWD", 87], ["هيجواين", "Higuaín", "FWD", 87], ["أجويرو", "Agüero", "FWD", 89], ["تيفيز", "Tévez", "FWD", 86],
+  ["كوتينيو", "Coutinho", "MID", 85], ["أوزيل", "Özil", "MID", 87], ["مولر", "Thomas Müller", "FWD", 87], ["بوآتنج", "Boateng", "DEF", 84],
+  ["بودولسكي", "Podolski", "FWD", 84], ["شاكيري", "Shaqiri", "MID", 82], ["روي كوستا", "Rui Costa", "MID", 87], ["ديكو", "Deco", "MID", 87],
+  ["بيبي", "Pepe", "FWD", 84], ["ناني", "Nani", "FWD", 84], ["كواريزما", "Quaresma", "FWD", 83],
+  ["فلاهوفيتش", "Vlahović", "FWD", 85], ["لاوتارو مارتينيز", "Lautaro Martínez", "FWD", 89], ["خوليان ألفاريز", "Julián Álvarez", "FWD", 87],
+  ["نكونكو", "Nkunku", "FWD", 85], ["إيساك", "Isak", "FWD", 87], ["واتكينز", "Watkins", "FWD", 85], ["جيوكيريش", "Gyökeres", "FWD", 87],
+  ["بونيفاس", "Boniface", "FWD", 83], ["ريتيجي", "Retegui", "FWD", 83], ["لامين يامال", "Lamine Yamal", "FWD", 89], ["رافينيا", "Raphinha", "FWD", 86],
+  ["راشفورد", "Rashford", "FWD", 85], ["أنتوني", "Antony", "FWD", 80], ["ليساو", "Leão", "FWD", 85], ["كييزا", "Chiesa", "FWD", 84],
 ];
-const POOL = RAW_POOL.map(([name, nameEn, pos, rating], i) => ({
+
+// عمود "لاعبين ملء الفريق" — أسماء متولّدة (مش أشخاص حقيقيين) عشان نوصل لعدد كبير
+// من غير ما نختلق تقييمات لناس حقيقية. زي وضع "career mode" في ألعاب الكورة.
+const FILLER_FIRST = [
+  "كريم", "أحمد", "محمد", "علي", "عمر", "يوسف", "خالد", "مصطفى", "طارق", "حسن",
+  "لوكاس", "دييجو", "بابلو", "ماركو", "أندريا", "لويس", "كارلوس", "فيليبي", "برونو", "ريكاردو",
+  "توماس", "لوكاش", "ماتيوس", "دانيال", "سيباستيان", "ألكسندر", "إيفان", "نيكولا", "دراجان", "ميلان",
+  "جاك", "توم", "هاري", "أوليفر", "جيمس", "بن", "ماكس", "ليام", "جورج", "تشارلي",
+];
+const FILLER_LAST = [
+  "الشامي", "بدر", "منصور", "سالم", "زكي", "عبده", "فتحي", "جمال", "رشدي", "شريف",
+  "فرنانديز", "جونزاليس", "رودريجيز", "مارتينيز", "لوبيز", "سانشيز", "بيريز", "جوميز", "دياز", "كروز",
+  "شميت", "مولر", "فيشر", "فاجنر", "بيكر", "شولتز", "هوفمان", "كايزر", "ريختر", "كلاين",
+  "سميث", "جونز", "ويليامز", "براون", "تايلور", "ديفيز", "إيفانز", "توماس", "روبرتس", "واكر",
+];
+function seededRand(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+function generateFillerPool(count) {
+  const rand = seededRand(1234567);
+  const posWeights = ["GK", "DEF", "DEF", "DEF", "MID", "MID", "MID", "FWD", "FWD", "FWD", "FWD"];
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const fn = FILLER_FIRST[Math.floor(rand() * FILLER_FIRST.length)];
+    const ln = FILLER_LAST[Math.floor(rand() * FILLER_LAST.length)];
+    const pos = posWeights[Math.floor(rand() * posWeights.length)];
+    const rating = 60 + Math.floor(rand() * 22); // 60-81: لاعبين كويسين بس مش نجوم زي القايمة الموثقة فوق
+    const full = `${fn} ${ln}`;
+    out.push([full, full, pos, rating]);
+  }
+  return out;
+}
+const FULL_RAW_POOL = [...RAW_POOL, ...generateFillerPool(1000 - RAW_POOL.length)];
+const POOL = FULL_RAW_POOL.map(([name, nameEn, pos, rating], i) => ({
   id: "p" + i, name, nameEn, pos, rating,
   base: Math.round(((rating - 60) * 6) / 5) * 5,
 }));
