@@ -536,8 +536,10 @@ function Btn({ children, onClick, disabled, variant = "primary", className = "" 
 
 // ---------- Player jersey-card avatar (used instead of plain names wherever players are picked) ----------
 function jerseyNumber(id) {
+  if (!id) return 1;
+  const s = String(id);
   let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return (h % 99) + 1;
 }
 const CARD_SIZES = {
@@ -1324,32 +1326,33 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
   const { tr, lang } = useLang();
   const [bidAmt, setBidAmt] = useState("");
   const a = room.auction;
+  if (!room || !Array.isArray(room.players)) return <RoomBroken onLeave={onLeave} />;
   if (!a) return <Shell><div className="ff-body text-center py-10" style={{ color: "#EEF1FF" }}>{tr("جاري التحضير...", "Getting ready...")}</div></Shell>;
-  const me = room.players.find((p) => p.id === myId);
+  const me = room.players?.find((p) => p.id === myId);
   const secsLeft = Math.max(0, Math.ceil((a.deadline - now) / 1000));
   const isCoach = room.stage === "coach";
   const isPosition = !isCoach && room.auctionType === "position";
   const posLabel = lang === "ar" ? POS_LABEL : POS_LABEL_EN;
 
-  let title, base, cardColor;
+  let title, base, cardColor, chipLabel;
   if (isCoach) {
     const coach = coachById(a.coachId);
     if (!coach) return <RoomBroken onLeave={onLeave} />;
     title = cname(coach, lang); base = cstyle(coach, lang); cardColor = "#39FF88";
   } else if (isPosition) {
-    title = tr(`مركز: ${posLabel[a.pos]} 🎁`, `Position: ${posLabel[a.pos]} 🎁`); base = tr("لاعب عشوائي من نفس المركز — هتعرف مين بعد ما تكسب", "A random player of this position — revealed once you win"); cardColor = POS_COLOR[a.pos];
+    title = tr(`مركز: ${posLabel[a.pos]} 🎁`, `Position: ${posLabel[a.pos]} 🎁`); base = tr("لاعب عشوائي من نفس المركز — هتعرف مين بعد ما تكسب", "A random player of this position — revealed once you win"); cardColor = POS_COLOR[a.pos]; chipLabel = posLabel[a.pos];
   } else {
     const pl = playerById(a.playerId);
     if (!pl) return <RoomBroken onLeave={onLeave} />;
-    title = pname(pl, lang); base = tr(`تقييم ${pl.rating} · سعر أساسي ${pl.base}`, `Rating ${pl.rating} · Base price ${pl.base}`); cardColor = POS_COLOR[pl.pos];
+    title = pname(pl, lang); base = tr(`تقييم ${pl.rating} · سعر أساسي ${pl.base}`, `Rating ${pl.rating} · Base price ${pl.base}`); cardColor = POS_COLOR[pl.pos]; chipLabel = posLabel[pl.pos];
   }
 
-  const totalRounds = isCoach ? room.coachPool.length : room.pool.length;
+  const totalRounds = (isCoach ? room.coachPool?.length : room.pool?.length) || 0;
   const progLabel = isCoach ? tr("مدرب", "Coach") : isPosition ? tr("جولة", "Round") : tr("لاعب", "Player");
 
   return (
     <Shell>
-      <Header title={isCoach ? tr("مزاد المدربين", "Coach Auction") : tr("المزاد جارٍ", "Auction in progress")} sub={tr(`${progLabel} ${room.poolIndex + 1} من ${totalRounds}`, `${progLabel} ${room.poolIndex + 1} of ${totalRounds}`)} onLeave={onLeave} />
+      <Header title={isCoach ? tr("مزاد المدربين", "Coach Auction") : tr("المزاد جارٍ", "Auction in progress")} sub={tr(`${progLabel} ${(room.poolIndex || 0) + 1} من ${totalRounds}`, `${progLabel} ${(room.poolIndex || 0) + 1} of ${totalRounds}`)} onLeave={onLeave} />
 
       <div className="rounded-xl p-5 mb-4 text-center" style={{ background: "#141B3D", border: `2px solid ${cardColor}55` }}>
         {!isCoach && !isPosition && (
@@ -1357,7 +1360,7 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
             <PlayerCard player={playerById(a.playerId)} lang={lang} size="lg" selected />
           </div>
         )}
-        {!isCoach && <Chip color={cardColor}>{isPosition ? posLabel[a.pos] : posLabel[playerById(a.playerId).pos]}</Chip>}
+        {!isCoach && <Chip color={cardColor}>{chipLabel}</Chip>}
         <div className="ff-display text-4xl font-bold mt-1" style={{ color: "#EEF1FF" }}>{title}</div>
         <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{base}</div>
         <div className="ff-display text-2xl font-bold mt-3" style={{ color: "#FF3B5C" }}>{secsLeft}s</div>
@@ -1368,10 +1371,10 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
           <div className="ff-body text-sm" style={{ color: "#EEF1FFAA" }}>{tr("أعلى عرض حاليًا", "Current top bid")}</div>
           <div key={a.currentBid} className="ff-display text-3xl font-bold ff-pop-in" style={{ color: "#39FF88" }}>{a.currentBid}</div>
           <div className="ff-body text-sm mb-4" style={{ color: "#EEF1FF" }}>
-            {a.bidderId ? (room.players.find((p) => p.id === a.bidderId)?.name || "") : tr("لا يوجد عروض بعد", "No bids yet")}
+            {a.bidderId ? (room.players?.find((p) => p.id === a.bidderId)?.name || "") : tr("لا يوجد عروض بعد", "No bids yet")}
           </div>
           <Btn className="w-full" onClick={onLiveBid}
-            disabled={!me || me.budget < a.currentBid + 10 || (isCoach ? !!me.coachId : me.squad.length >= room.squadSize) || a.bidderId === myId}>
+            disabled={!me || me.budget < a.currentBid + 10 || (isCoach ? !!me.coachId : (me.squad?.length || 0) >= room.squadSize) || a.bidderId === myId}>
             {tr(`زايد +10 (${a.currentBid + 10})`, `Bid +10 (${a.currentBid + 10})`)}
           </Btn>
         </div>
@@ -1386,10 +1389,10 @@ function Auction({ room, myId, now, onLiveBid, onBlindBid, onLeave }) {
 
 function BlindBidBox({ room, myId, a, bidAmt, setBidAmt, onSubmit, baseAmt, isCoach }) {
   const { tr } = useLang();
-  const me = room.players.find((p) => p.id === myId);
-  const alreadySubmitted = Object.prototype.hasOwnProperty.call(a.bids, myId);
-  const submittedCount = Object.keys(a.bids).length;
-  const totalActive = room.players.filter((p) => (isCoach ? !p.coachId : p.squad.length < room.squadSize)).length;
+  const me = room.players?.find((p) => p.id === myId);
+  const alreadySubmitted = Object.prototype.hasOwnProperty.call(a.bids || {}, myId);
+  const submittedCount = Object.keys(a.bids || {}).length;
+  const totalActive = (room.players || []).filter((p) => (isCoach ? !p.coachId : (p.squad?.length || 0) < room.squadSize)).length;
 
   if (alreadySubmitted) {
     return (
@@ -1399,7 +1402,7 @@ function BlindBidBox({ room, myId, a, bidAmt, setBidAmt, onSubmit, baseAmt, isCo
       </div>
     );
   }
-  const done = isCoach ? me?.coachId : me && me.squad.length >= room.squadSize;
+  const done = isCoach ? me?.coachId : me && (me.squad?.length || 0) >= room.squadSize;
   if (!me || done) {
     return <div className="ff-body text-center text-sm mb-4" style={{ color: "#EEF1FFAA" }}>{tr(`${isCoach ? "معاك مدرب خلاص" : "تشكيلتك مكتملة"}، في انتظار الباقي`, `${isCoach ? "You already have a coach" : "Your squad is complete"}, waiting for the rest`)}</div>;
   }
@@ -1422,8 +1425,9 @@ function SquadsMini({ room, myId }) {
     <div>
       <div className="ff-body text-sm font-bold mb-2" style={{ color: "#EEF1FF" }}>{tr("الفرق حتى الآن", "Squads so far")}</div>
       <div className="space-y-2">
-        {room.players.map((p) => {
+        {(room.players || []).map((p) => {
           const coach = coachById(p.coachId);
+          const squad = Array.isArray(p.squad) ? p.squad : [];
           return (
             <div key={p.id} className="px-3 py-2 rounded-lg" style={{ background: "#141B3D" }}>
               <div className="flex justify-between ff-body text-sm">
@@ -1431,7 +1435,7 @@ function SquadsMini({ room, myId }) {
                 <span style={{ color: "#39FF88" }}>{tr(`${p.budget} متبقي`, `${p.budget} left`)}</span>
               </div>
               <div className="ff-body text-xs mt-1" style={{ color: "#EEF1FFAA" }}>
-                {p.squad.length ? p.squad.map((s) => pname(playerById(s.id) || s, lang)).join(tr("، ", ", ")) : tr("لسه معندوش لاعبين", "No players yet")}
+                {squad.length ? squad.map((s) => pname(playerById(s.id) || s, lang)).join(tr("، ", ", ")) : tr("لسه معندوش لاعبين", "No players yet")}
               </div>
               {coach && <div className="ff-body text-xs mt-0.5" style={{ color: "#39FF88AA" }}>{tr(`المدرب: ${cname(coach, lang)}`, `Coach: ${cname(coach, lang)}`)}</div>}
             </div>
