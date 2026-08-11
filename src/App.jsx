@@ -70,42 +70,23 @@ const RAW_POOL = [
   ["نكونكو", "Nkunku", "FWD", 85], ["إيساك", "Isak", "FWD", 87], ["واتكينز", "Watkins", "FWD", 85], ["جيوكيريش", "Gyökeres", "FWD", 87],
   ["بونيفاس", "Boniface", "FWD", 83], ["ريتيجي", "Retegui", "FWD", 83], ["لامين يامال", "Lamine Yamal", "FWD", 89], ["رافينيا", "Raphinha", "FWD", 86],
   ["راشفورد", "Rashford", "FWD", 85], ["أنتوني", "Antony", "FWD", 80], ["ليساو", "Leão", "FWD", 85], ["كييزا", "Chiesa", "FWD", 84],
+  // ---------- توسعة إضافية: تركيز على الدوري الإنجليزي، الإسباني، والإيطالي ----------
+  ["دايفيد رايا", "David Raya", "GK", 85], ["مايجنان", "Maignan", "GK", 85],
+  ["كول بالمر", "Cole Palmer", "MID", 87], ["ماديسون", "Maddison", "MID", 84], ["جيبس وايت", "Gibbs-White", "MID", 82],
+  ["مبومو", "Mbeumo", "FWD", 83], ["نيكولاس جاكسون", "Nicolas Jackson", "FWD", 81], ["جارود باون", "Jarrod Bowen", "FWD", 83], ["سولانكي", "Solanke", "FWD", 81],
+  ["إيزي", "Eberechi Eze", "MID", 83], ["ميتوما", "Mitoma", "FWD", 82], ["أنتوني جوردون", "Anthony Gordon", "FWD", 83],
+  ["برونو جيماريش", "Bruno Guimarães", "MID", 85], ["كايسيدو", "Caicedo", "MID", 84], ["تيلمانس", "Tielemans", "MID", 82], ["جالاجر", "Gallagher", "MID", 82],
+  ["ستونز", "John Stones", "DEF", 84], ["روبين دياز", "Rúben Dias", "DEF", 87], ["ناثان أكيه", "Nathan Aké", "DEF", 82], ["شار", "Fabian Schär", "DEF", 82],
+  ["بوتمان", "Botman", "DEF", 82], ["دان بيرن", "Dan Burn", "DEF", 79],
+  ["رودريجو", "Rodrygo", "FWD", 87], ["جافي", "Gavi", "MID", 85], ["دي يونج", "Frenkie de Jong", "MID", 86], ["إيسكو", "Isco", "MID", 83],
+  ["موراتا", "Morata", "FWD", 82], ["إنياكي ويليامز", "Iñaki Williams", "FWD", 83], ["نيكو ويليامز", "Nico Williams", "FWD", 85], ["أويارثابال", "Oyarzabal", "FWD", 85],
+  ["تاكيفوسا كوبو", "Takefusa Kubo", "FWD", 83], ["لابورت", "Laporte", "DEF", 84],
+  ["لوكاكو", "Lukaku", "FWD", 86], ["ديبالا", "Dybala", "FWD", 86], ["دومفريس", "Dumfries", "DEF", 84], ["تشالهان أوغلو", "Çalhanoğlu", "MID", 85],
+  ["زانيولو", "Zaniolo", "MID", 79], ["بريمير", "Bremer", "DEF", 83], ["ديماركو", "Dimarco", "DEF", 83], ["تونالي", "Tonali", "MID", 85],
+  ["فراتيزي", "Frattesi", "MID", 82], ["لوكاتيلي", "Locatelli", "MID", 83], ["كين", "Moise Kean", "FWD", 81], ["لوكمان", "Lookman", "FWD", 84],
 ];
 
-// عمود "لاعبين ملء الفريق" — أسماء متولّدة (مش أشخاص حقيقيين) عشان نوصل لعدد كبير
-// من غير ما نختلق تقييمات لناس حقيقية. زي وضع "career mode" في ألعاب الكورة.
-const FILLER_FIRST = [
-  "كريم", "أحمد", "محمد", "علي", "عمر", "يوسف", "خالد", "مصطفى", "طارق", "حسن",
-  "لوكاس", "دييجو", "بابلو", "ماركو", "أندريا", "لويس", "كارلوس", "فيليبي", "برونو", "ريكاردو",
-  "توماس", "لوكاش", "ماتيوس", "دانيال", "سيباستيان", "ألكسندر", "إيفان", "نيكولا", "دراجان", "ميلان",
-  "جاك", "توم", "هاري", "أوليفر", "جيمس", "بن", "ماكس", "ليام", "جورج", "تشارلي",
-];
-const FILLER_LAST = [
-  "الشامي", "بدر", "منصور", "سالم", "زكي", "عبده", "فتحي", "جمال", "رشدي", "شريف",
-  "فرنانديز", "جونزاليس", "رودريجيز", "مارتينيز", "لوبيز", "سانشيز", "بيريز", "جوميز", "دياز", "كروز",
-  "شميت", "مولر", "فيشر", "فاجنر", "بيكر", "شولتز", "هوفمان", "كايزر", "ريختر", "كلاين",
-  "سميث", "جونز", "ويليامز", "براون", "تايلور", "ديفيز", "إيفانز", "توماس", "روبرتس", "واكر",
-];
-function seededRand(seed) {
-  let s = seed >>> 0;
-  return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-}
-function generateFillerPool(count) {
-  const rand = seededRand(1234567);
-  const posWeights = ["GK", "DEF", "DEF", "DEF", "MID", "MID", "MID", "FWD", "FWD", "FWD", "FWD"];
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const fn = FILLER_FIRST[Math.floor(rand() * FILLER_FIRST.length)];
-    const ln = FILLER_LAST[Math.floor(rand() * FILLER_LAST.length)];
-    const pos = posWeights[Math.floor(rand() * posWeights.length)];
-    const rating = 60 + Math.floor(rand() * 22); // 60-81: لاعبين كويسين بس مش نجوم زي القايمة الموثقة فوق
-    const full = `${fn} ${ln}`;
-    out.push([full, full, pos, rating]);
-  }
-  return out;
-}
-const FULL_RAW_POOL = [...RAW_POOL, ...generateFillerPool(1000 - RAW_POOL.length)];
-const POOL = FULL_RAW_POOL.map(([name, nameEn, pos, rating], i) => ({
+const POOL = RAW_POOL.map(([name, nameEn, pos, rating], i) => ({
   id: "p" + i, name, nameEn, pos, rating,
   base: Math.round(((rating - 60) * 6) / 5) * 5,
 }));
