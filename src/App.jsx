@@ -1444,8 +1444,9 @@ function SquadsMini({ room, myId }) {
 // ---------- Teams / Match ----------
 function Teams({ room, myId, onRunMatch, onRunTournament, onLeave }) {
   const { tr, lang } = useLang();
-  const [a, setA] = useState(room.players[0]?.id);
-  const [b, setB] = useState(room.players[1]?.id || room.players[0]?.id);
+  const [a, setA] = useState(room?.players?.[0]?.id);
+  const [b, setB] = useState(room?.players?.[1]?.id || room?.players?.[0]?.id);
+  if (!room || !room.players || !room.matches) return <RoomBroken onLeave={onLeave} />;
   const isHost = room.players[0]?.id === myId;
   const lastMatch = room.matches[room.matches.length - 1];
   const standings = computeStandings(room.players, room.matches);
@@ -1793,6 +1794,7 @@ function GwPlay({ room, myId, onAsk, onAnswer, onGuess, onRematch, onLeave, elim
   const { tr, lang } = useLang();
   const [qText, setQText] = useState("");
   const [guessId, setGuessId] = useState("");
+  if (!room || !room.players) return <RoomBroken onLeave={onLeave} />;
   const me = room.players.find((p) => p.id === myId);
   const opp = room.players.find((p) => p.id !== myId);
   const mySecret = me ? playerById(me.secretId) : null;
@@ -2184,6 +2186,7 @@ function DtLobby({ room, myId, onStart, onLeave }) {
 
 function DtPick({ room, myId, onToggle, onPickCoach, onReady, onCompute, onLeave }) {
   const { tr, lang } = useLang();
+  if (!room || !room.players) return <RoomBroken onLeave={onLeave} />;
   const me = room.players.find((p) => p.id === myId);
   const isHost = room.players[0]?.id === myId;
   const allReady = room.players.every((p) => p.ready);
@@ -2229,6 +2232,7 @@ function DtPick({ room, myId, onToggle, onPickCoach, onReady, onCompute, onLeave
 
 function DtResults({ room, myId, onLeave }) {
   const { tr, lang } = useLang();
+  if (!room || !room.players) return <RoomBroken onLeave={onLeave} />;
   return (
     <Shell>
       <Header title={tr("النتيجة", "Results")} sub={tr("تشكيلة الأحلام", "Dream Team")} onLeave={onLeave} />
@@ -2720,6 +2724,7 @@ function LgDraft({ room, myId, comp, onToggle, onCaptain, onReady, onLeave }) {
 function LgPlay({ room, myId, comp, onRunGameweek, onLeave }) {
   const { tr, lang } = useLang();
   const [loading, setLoading] = useState(false);
+  if (!room || !room.players || !room.gameweeks) return <RoomBroken onLeave={onLeave} />;
   const standings = [...room.players].sort((a, b) => b.total - a.total);
   const lastGw = room.gameweeks[room.gameweeks.length - 1];
 
@@ -2773,7 +2778,12 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(err) { console.error("App crashed:", err); }
   handleReset = () => {
-    try { window.storage?.delete?.("my-session", false); } catch {}
+    try {
+      window.storage?.delete?.("my-session", false);
+      window.storage?.delete?.("gw-session", false);
+      window.storage?.delete?.("dt-session", false);
+      window.storage?.delete?.("lg-session", false);
+    } catch {}
     this.setState({ hasError: false });
     window.location.reload();
   };
